@@ -673,8 +673,68 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 [data-theme="light"] .copyright-footer{
   background: linear-gradient(180deg, transparent, rgba(255,255,255,0.7));
 }
-</style></head>
+</style>
+<style id="kkpas-install-gate-style">
+/* KKPAS install-on-first-open experience */
+.kkpas-install-gate{
+  position:fixed; inset:0; z-index:2147483000;
+  display:none; align-items:center; justify-content:center;
+  padding:24px;
+  background:rgba(2,6,23,.88);
+  -webkit-backdrop-filter:blur(14px);
+  backdrop-filter:blur(14px);
+}
+.kkpas-install-gate.show{display:flex}
+.kkpas-install-card{
+  width:min(440px,100%);
+  background:var(--surface,#151e2e);
+  color:var(--text,#f8fafc);
+  border:1px solid var(--stroke,rgba(255,255,255,.08));
+  border-radius:24px;
+  padding:24px;
+  box-shadow:0 24px 80px rgba(0,0,0,.55);
+  text-align:center;
+}
+.kkpas-install-icon{
+  width:88px;height:88px;border-radius:22px;
+  display:block;margin:0 auto 16px;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
+}
+.kkpas-install-card h2{margin:0 0 10px;font-size:24px}
+.kkpas-install-card p{margin:0 0 16px;line-height:1.55;color:var(--text-secondary,#94a3b8)}
+.kkpas-install-steps{
+  text-align:left; margin:16px 0 20px; padding:14px 16px;
+  border:1px solid var(--stroke,rgba(255,255,255,.08));
+  background:var(--surface-elevated,#1e293b);
+  border-radius:16px; line-height:1.65; font-size:14px;
+}
+.kkpas-install-primary,.kkpas-install-secondary{
+  width:100%;border:0;border-radius:16px;padding:15px 16px;
+  font-size:16px;font-weight:800;cursor:pointer;
+}
+.kkpas-install-primary{background:var(--brand,#22c55e);color:#fff}
+.kkpas-install-secondary{
+  margin-top:10px;background:transparent;color:var(--text-secondary,#94a3b8);
+  border:1px solid var(--stroke,rgba(255,255,255,.08));
+}
+.kkpas-install-note{font-size:12px!important;margin-top:12px!important}
+</style>
+
+</head>
 <body>
+
+<div id="kkpasInstallGate" class="kkpas-install-gate" role="dialog" aria-modal="true" aria-labelledby="kkpasInstallTitle">
+  <div class="kkpas-install-card">
+    <img class="kkpas-install-icon" src="https://arleta.site/interactivelink/3333/DKLPO_Master_192.png" alt="KKPAS">
+    <h2 id="kkpasInstallTitle">Pasang Aplikasi KKPAS</h2>
+    <p id="kkpasInstallText">Untuk penggunaan lebih mudah, pasang KKPAS pada telefon anda.</p>
+    <div id="kkpasInstallSteps" class="kkpas-install-steps" style="display:none"></div>
+    <button id="kkpasInstallBtn" class="kkpas-install-primary" type="button">Install KKPAS</button>
+    <button id="kkpasContinueBtn" class="kkpas-install-secondary" type="button">Teruskan dalam browser</button>
+    <p class="kkpas-install-note">Pemasangan aplikasi memerlukan pengesahan pengguna oleh Android/iOS.</p>
+  </div>
+</div>
+
 
 <!-- Auto-save Indicator -->
 <div class="autosave-indicator" id="autoSaveIndicator">
@@ -2268,6 +2328,104 @@ if ('serviceWorker' in navigator) {
       .catch(error => console.warn('KKPAS Service Worker registration failed:', error));
   });
 }
+</script>
+
+
+<script id="kkpas-install-gate-script">
+(() => {
+  let deferredInstallPrompt = null;
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    window.navigator.standalone === true;
+
+  const gate = document.getElementById('kkpasInstallGate');
+  const btn = document.getElementById('kkpasInstallBtn');
+  const continueBtn = document.getElementById('kkpasContinueBtn');
+  const text = document.getElementById('kkpasInstallText');
+  const steps = document.getElementById('kkpasInstallSteps');
+
+  function showGate() {
+    if (!gate || isStandalone) return;
+    gate.classList.add('show');
+
+    if (isIOS) {
+      text.textContent = 'Pada iPhone/iPad, pemasangan dibuat melalui Safari.';
+      steps.style.display = 'block';
+      steps.innerHTML =
+        '<strong>Cara pasang:</strong><br>' +
+        '1. Buka link ini dalam <strong>Safari</strong>.<br>' +
+        '2. Tekan <strong>Share</strong>.<br>' +
+        '3. Pilih <strong>Add to Home Screen</strong>.<br>' +
+        '4. Hidupkan <strong>Open as Web App</strong> jika dipaparkan.<br>' +
+        '5. Tekan <strong>Add</strong>.';
+      btn.textContent = 'Saya Faham — Buka KKPAS';
+    } else if (isAndroid) {
+      text.textContent = 'Tekan butang di bawah untuk pasang KKPAS sebagai aplikasi.';
+      btn.textContent = deferredInstallPrompt ? 'Install KKPAS' : 'Cara Install KKPAS';
+    } else {
+      text.textContent = 'Jika browser menyokong pemasangan PWA, anda boleh pasang KKPAS sebagai aplikasi.';
+      btn.textContent = deferredInstallPrompt ? 'Install KKPAS' : 'Cara Install';
+    }
+  }
+
+  function hideGate() {
+    gate?.classList.remove('show');
+  }
+
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    if (!isStandalone) showGate();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    hideGate();
+    try { localStorage.setItem('kkpas-installed', '1'); } catch (_) {}
+  });
+
+  btn?.addEventListener('click', async () => {
+    if (isIOS) {
+      hideGate();
+      return;
+    }
+
+    if (deferredInstallPrompt) {
+      try {
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice;
+        if (choice && choice.outcome === 'accepted') {
+          hideGate();
+        } else {
+          showGate();
+        }
+      } catch (err) {
+        console.warn('KKPAS install prompt failed:', err);
+      } finally {
+        deferredInstallPrompt = null;
+      }
+      return;
+    }
+
+    steps.style.display = 'block';
+    steps.innerHTML = isAndroid
+      ? '<strong>Jika dialog install belum muncul:</strong><br>Tekan menu browser (⋮) → <strong>Install app</strong> atau <strong>Add to Home screen</strong>.'
+      : '<strong>Gunakan menu browser</strong> dan pilih pilihan Install / Add to Home Screen jika tersedia.';
+  });
+
+  continueBtn?.addEventListener('click', hideGate);
+
+  // Show immediately on normal browser mode. If Android's native install
+  // event arrives shortly after load, the button automatically becomes active.
+  window.addEventListener('load', () => {
+    if (isStandalone) return;
+    setTimeout(showGate, 500);
+  });
+})();
 </script>
 
 </body></html>
