@@ -1,0 +1,32 @@
+{
+  "name": "KKPAS Monthly Inspection - Desa Kim Loong Palm Oil Sdn Bhd",
+  "short_name": "KKPAS",
+  "description": "KKPAS Monthly Inspection workplace safety inspection system for Desa Kim Loong Palm Oil Sdn Bhd.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {
+      "src": "https://arleta.site/interactivelink/3333/DKLPO_Master_192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://arleta.site/interactivelink/3333/DKLPO_Master_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://arleta.site/interactivelink/3333/DKLPO_Master_1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
