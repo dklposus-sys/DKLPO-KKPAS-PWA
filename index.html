@@ -909,12 +909,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 <span data-ms="Gambar Bukti" data-en="Evidence Photos">Gambar Bukti</span>
 <span style="color:var(--text-secondary);font-size:12px;"> (Max 8 <span data-ms="gambar" data-en="photos">gambar</span>, <250KB <span data-ms="setiap satu" data-en="each">setiap satu</span>)</span>
 </label>
-
-<div class="ai-system-note">
-  <b>🤖 Gemini 3.5 Flash-Lite</b><br>
-  <span data-ms="AI menilai perkara yang kelihatan dalam gambar sahaja. Semua status, severity dan tindakan ialah cadangan dan mesti disahkan oleh pemeriksa." data-en="AI evaluates only what is visible in the image. All status, severity and action results are suggestions and must be confirmed by the inspector.">AI menilai perkara yang kelihatan dalam gambar sahaja. Semua status, severity dan tindakan ialah cadangan dan mesti disahkan oleh pemeriksa.</span>
-</div>
-
+  
 <div class="photo-actions">
 <button class="photo-btn" onclick="triggerCamera()">
 <span class="icon">📷</span>
@@ -985,7 +980,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 // ============================================
 // CONFIGURATION
 // ============================================
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyuv0-WF1cIeQm2ESBuHlrU5XWr3CGe5lcClhh2bSX8M3QScmYVuacTSUX2zkDyDB-1/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxOKIIeqJLdlIS1W1gcW6lU5lqU9pU7Ttzft1EhwsO8qzTL7jv5SdbE7oE-FJ5XBHgP/exec";
 const GEMINI_AI_MODEL = "gemini-3.5-flash-lite";
 const AI_ACTION = "analyzePhotoAI";
 const MAX_PHOTO_KB = 250;
@@ -2013,13 +2008,13 @@ function renderAIResult(photo) {
   if ((photo.aiState||'idle')==='loading') return `<div class="ai-result"><div class="ai-result-head"><span class="ai-spinner">⟳</span><span class="ai-title">${t('Gemini sedang menganalisis gambar...','Gemini is analysing the image...')}</span><span class="ai-badge">${GEMINI_AI_MODEL}</span></div></div>`;
   if (photo.aiState==='error') return `<div class="ai-result"><div class="ai-result-body"><div class="ai-danger">${escapeHtml(photo.aiError||t('Analisis AI gagal.','AI analysis failed.'))}</div><button class="ai-btn" type="button" onclick="analyzePhotoWithAI(${photo.id})">${t('Cuba Semula Analisis AI','Retry AI Analysis')}</button></div></div>`;
   const ai=photo.aiAnalysis;
-  if (!ai) return `<div style="padding:12px 16px 16px;"><button class="ai-btn" type="button" onclick="analyzePhotoWithAI(${photo.id})">🤖 ${t('Analisis Gambar dengan Gemini','Analyse Image with Gemini')}</button></div>`;
+  if (!ai) return `<div style="padding:12px 16px 16px;"><button class="ai-btn" type="button" onclick="analyzePhotoWithAI(${photo.id})">🤖 ${t('Analisis Gambar','Analyse Image')}</button></div>`;
   const hazards=Array.isArray(ai.visibleHazards)?ai.visibleHazards:[];
   const mismatch=getAIMismatchMessage(ai), accepted=photo.aiAccepted||{};
   const q=ai.imageQuality||{}, conf=Number.isFinite(Number(ai.confidence))?Math.max(0,Math.min(100,Math.round(Number(ai.confidence)))):0;
   const hazardHtml=hazards.length?`<ul class="ai-hazard-list">${hazards.map(h=>`<li>${escapeHtml(h)}</li>`).join('')}</ul>`:`<span>${t('Tiada hazard yang boleh dikenal pasti dengan yakin daripada gambar ini.','No hazard could be identified confidently from this image.')}</span>`;
   const acceptedHtml=(accepted.all||accepted.comment||accepted.checklist||accepted.finding)?`<div class="ai-accepted">✓ ${t('Sebahagian/semua cadangan AI telah diterima oleh pemeriksa.','Some/all AI suggestions were accepted by the inspector.')}</div>`:'';
-  return `<div class="ai-result"><div class="ai-result-head"><span class="ai-title">🤖 ${t('Cadangan AI','AI Suggestion')}</span><span class="ai-badge">${escapeHtml(photo.aiModel||GEMINI_AI_MODEL)}</span><span class="ai-badge ai-confidence">${conf}%</span></div><div class="ai-result-body">
+  return `<div class="ai-result"><div class="ai-result-head"><span class="ai-title">🤖 ${t('Cadangan AI','AI Suggestion')}</span><span class="ai-badge">${escapeHtml(photo.aiModel)}</span><span class="ai-badge ai-confidence">${conf}%</span></div><div class="ai-result-body">
     ${q.status==='RETAKE'?`<div class="ai-warning">📷 ${escapeHtml(q.message||t('Gambar kurang sesuai untuk penilaian. Ambil semula gambar.','Image is not suitable for reliable assessment. Retake the image.'))}</div>`:''}
     ${mismatch?`<div class="ai-warning">⚠️ ${escapeHtml(mismatch)}</div>`:''}${acceptedHtml}
     <div class="ai-row"><strong>${t('Pemerhatian','Observation')}</strong>${escapeHtml(ai.observation||'-')}</div>
