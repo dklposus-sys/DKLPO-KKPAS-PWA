@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kkpas-pwa-v2-install';
+const CACHE_NAME = 'kkpas-pwa-v5-1-ai-gemini35';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
