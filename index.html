@@ -733,8 +733,22 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 @media(max-width:420px){.review-actions{grid-template-columns:1fr}}
 </style>
 
+
+<style id="kkpas-v53-style">
+.notification-bell{position:fixed;top:calc(var(--safe-top) + 56px);right:14px;z-index:1300;width:42px;height:42px;border:1px solid var(--stroke);border-radius:50%;background:var(--surface);color:var(--text);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;box-shadow:var(--shadow)}
+.notification-badge{position:absolute;top:-4px;right:-4px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--bad);color:#fff;font-size:10px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid var(--bg)}
+.notification-badge.show{display:flex}
+.notification-modal .draft-box{max-width:min(94vw,620px);width:min(94vw,620px);text-align:left;max-height:84vh;overflow:auto}
+.notification-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.notification-head h3{margin:0}
+.notification-item{border:1px solid var(--stroke);background:var(--surface-elevated);border-radius:14px;padding:13px;margin:10px 0}.notification-item .date{font-size:11px;color:var(--text-secondary);margin-bottom:6px}.notification-team{padding:8px 0;border-top:1px solid var(--stroke);font-size:13px}.notification-team:first-child{border-top:0}.notification-team b{display:block;margin-bottom:3px}.notification-station{color:var(--warn);font-weight:700}
+.offline-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--stroke);font-size:11px;font-weight:700;background:var(--surface-elevated);color:var(--text-secondary)}.offline-chip.offline{color:var(--warn);border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.08)}
+.ai-insight-card{border:1px solid rgba(59,130,246,.28);background:rgba(59,130,246,.07)}
+.sync-banner{position:fixed;left:16px;right:16px;bottom:calc(82px + var(--safe-bottom));z-index:1400;padding:11px 14px;border-radius:14px;border:1px solid var(--stroke);background:var(--surface);box-shadow:var(--shadow);font-size:12px;display:none}.sync-banner.show{display:block}
+</style>
 </head>
 <body>
+<button id="notificationBell" class="notification-bell" type="button" onclick="openNotificationCentre()" aria-label="Notification Centre">🔔<span id="notificationBadge" class="notification-badge">0</span></button>
+<div id="syncBanner" class="sync-banner"></div>
 
 <div id="kkpasInstallGate" class="kkpas-install-gate" role="dialog" aria-modal="true" aria-labelledby="kkpasInstallTitle">
   <div class="kkpas-install-card">
@@ -787,6 +801,22 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
         OK <span data-ms="(Log Keluar)" data-en="(Logout)">(Log Keluar)</span>
       </button>
     </div>
+  </div>
+</div>
+
+
+<!-- Notification Centre -->
+<div class="draft-modal notification-modal" id="notificationModal" onclick="handleNotificationBackdrop(event)">
+  <div class="draft-box" onclick="event.stopPropagation()">
+    <div class="notification-head">
+      <h3>🔔 <span data-ms="Notification Centre" data-en="Notification Centre">Notification Centre</span></h3>
+      <button type="button" class="map-close" onclick="closeNotificationCentre()" aria-label="Close">×</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="btn-secondary" style="width:auto;margin:0;" type="button" onclick="enableSystemNotifications()">🔔 <span data-ms="Aktifkan Notifikasi" data-en="Enable Notifications">Aktifkan Notifikasi</span></button>
+      <span id="networkStateChip" class="offline-chip">● Online</span>
+    </div>
+    <div id="notificationCentreBody"><div class="empty-state"><div class="icon">🔔</div><div>Loading...</div></div></div>
   </div>
 </div>
 
@@ -849,7 +879,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 </button>
 
 <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--text-secondary);">
-<span data-ms="Amalan Kerja Selamat Adalah Budaya Kita - V2.3" data-en="Safe Work Practices are Our Culture - V2.3">Versi 5.2</span></div>
+<span data-ms="Amalan Kerja Selamat Adalah Budaya Kita - V2.3" data-en="Safe Work Practices are Our Culture - V2.3">Versi 5.3.1</span></div>
 </div>
 </div>
 </div>
@@ -907,7 +937,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 <div class="card-mobile photo-section">
 <label style="display:block;margin-bottom:12px;">
 <span data-ms="Gambar Bukti" data-en="Evidence Photos">Gambar Bukti</span>
-<span style="color:var(--text-secondary);font-size:12px;"> (Max 8 <span data-ms="gambar" data-en="photos">gambar</span>, <250KB <span data-ms="setiap satu" data-en="each">setiap satu</span>)</span>
+<span style="color:var(--text-secondary);font-size:12px;"> (Max 12 <span data-ms="gambar" data-en="photos">gambar</span>, <250KB <span data-ms="setiap satu" data-en="each">setiap satu</span>)</span>
 </label>
 
 <div class="review-system-note">
@@ -944,30 +974,37 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 <!-- Comment -->
 <div class="card-mobile">
 <label data-ms="Komen Keseluruhan" data-en="General Comment">Komen Keseluruhan</label>
-<textarea class="form-control" id="inspectComment" rows="3" placeholder="Komen keseluruhan... / General comments..."></textarea>
+<textarea class="form-control" id="inspectComment" rows="3" placeholder="Komen keseluruhan... / General comments..." oninput="saveDraft()"></textarea>
+</div>
+
+<!-- AI Insight -->
+<div class="card-mobile ai-insight-card" id="aiInsightSection" style="display:none;">
+<label>🤖 <span data-ms="AI Insight" data-en="AI Insight">AI Insight</span></label>
+<textarea class="form-control" id="aiInsightText" rows="4" placeholder="AI Insight..." oninput="updateAiInsightText(this.value)"></textarea>
+<div style="font-size:11px;color:var(--text-secondary);margin-top:8px;" data-ms="Insight ini ialah cadangan bantuan dan boleh diedit oleh pemeriksa." data-en="This insight is an assistance suggestion and can be edited by the inspector.">Insight ini ialah cadangan bantuan dan boleh diedit oleh pemeriksa.</div>
 </div>
 
 <!-- Rating -->
 <div class="card-mobile">
 <label data-ms="Rating Pemeriksaan" data-en="Inspection Rating">Rating Pemeriksaan</label>
 <div class="rating-container" id="ratingContainer">
-<div class="rating-option" onclick="setRating(5, this)">
+<div class="rating-option" data-rating="5" onclick="setRating(5, this)">
 <span class="rating-number">5</span>
 <span class="rating-label" data-ms="Sangat Baik" data-en="Excellent">Sangat Baik</span>
 </div>
-<div class="rating-option" onclick="setRating(4, this)">
+<div class="rating-option" data-rating="4" onclick="setRating(4, this)">
 <span class="rating-number">4</span>
 <span class="rating-label" data-ms="Baik" data-en="Good">Baik</span>
 </div>
-<div class="rating-option" onclick="setRating(3, this)">
+<div class="rating-option" data-rating="3" onclick="setRating(3, this)">
 <span class="rating-number">3</span>
 <span class="rating-label" data-ms="Sederhana" data-en="Average">Sederhana</span>
 </div>
-<div class="rating-option" onclick="setRating(2, this)">
+<div class="rating-option" data-rating="2" onclick="setRating(2, this)">
 <span class="rating-number">2</span>
 <span class="rating-label" data-ms="Lemah" data-en="Poor">Lemah</span>
 </div>
-<div class="rating-option" onclick="setRating(1, this)">
+<div class="rating-option" data-rating="1" onclick="setRating(1, this)">
 <span class="rating-number">1</span>
 <span class="rating-label" data-ms="Sangat Lemah" data-en="Very Poor">Sangat Lemah</span>
 </div>
@@ -988,50 +1025,111 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzWcWIO8LZMTpEGYtK_MHj6TMXukiFji7LcaLvtYvTxIR2MML2pXyPHjWsrxZAxk0SQ/exec";
 const PHOTO_REVIEW_ACTION = "reviewPhoto";
 const MAX_PHOTO_KB = 250;
+const MAX_PHOTOS = 12;
+const KKPAS_DB_NAME = 'kkpas-offline-v1';
+const KKPAS_DB_VERSION = 3;
+const KKPAS_DRAFT_KEY = 'current-draft';
 const SUPPORTED_PHOTO_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 const UNSUPPORTED_HEIC_TYPES = ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"];
 
 // ============================================
-// GPS ENFORCEMENT (Client-side)
+// GPS ENFORCEMENT + INTEGRITY HEURISTICS (Client-side)
 // ============================================
-// If GPS is OFF / permission denied: checklist cannot be accessed.
-// Weak GPS accuracy: allow, but will be flagged (yellow) on admin dashboard.
+// A PWA cannot prove that Android/iOS location was not spoofed. These checks make
+// accidental/low-effort falsification harder and provide server-verifiable telemetry.
 const GPS_WEAK_ACCURACY_M = 60;
+const GPS_REJECT_ACCURACY_M = 150;
+const GPS_SAMPLE_TARGET = 3;
+const GPS_MIN_SAMPLES = 2;
+const GPS_MAX_SAMPLE_SPREAD_M = 150;
 
 function getCurrentPositionAsync(options) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error('Geolocation not supported'));
-    navigator.geolocation.getCurrentPosition(resolve, reject, options || { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+    navigator.geolocation.getCurrentPosition(resolve, reject, options || { enableHighAccuracy: true, timeout: 9000, maximumAge: 0 });
   });
+}
+
+function haversineMetersClient_(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const p1 = toRad(Number(lat1)), p2 = toRad(Number(lat2));
+  const dp = toRad(Number(lat2) - Number(lat1));
+  const dl = toRad(Number(lng2) - Number(lng1));
+  const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function collectGpsSamples_() {
+  const samples = [];
+  let lastError = null;
+  for (let i = 0; i < GPS_SAMPLE_TARGET; i++) {
+    try {
+      const pos = await getCurrentPositionAsync({ enableHighAccuracy: true, timeout: 9000, maximumAge: 0 });
+      const c = pos && pos.coords;
+      if (c && isFinite(c.latitude) && isFinite(c.longitude)) {
+        samples.push({
+          lat: Number(c.latitude),
+          lng: Number(c.longitude),
+          accuracy: isFinite(c.accuracy) ? Number(c.accuracy) : null,
+          timestamp: Number(pos.timestamp || Date.now())
+        });
+      }
+    } catch (err) {
+      lastError = err;
+      if (!samples.length) continue;
+    }
+    if (i < GPS_SAMPLE_TARGET - 1) await new Promise(r => setTimeout(r, 350));
+  }
+  if (samples.length < GPS_MIN_SAMPLES) throw lastError || new Error('Insufficient GPS samples');
+  return samples;
+}
+
+function summarizeGpsSamples_(samples) {
+  const valid = (samples || []).filter(s => isFinite(s.lat) && isFinite(s.lng));
+  if (!valid.length) throw new Error('Invalid GPS samples');
+  let spreadM = 0;
+  for (let i=0;i<valid.length;i++) for (let j=i+1;j<valid.length;j++) {
+    spreadM = Math.max(spreadM, haversineMetersClient_(valid[i].lat,valid[i].lng,valid[j].lat,valid[j].lng));
+  }
+  const best = valid.slice().sort((a,b) => Number(a.accuracy ?? 999999) - Number(b.accuracy ?? 999999))[0];
+  return { best, spreadM: Math.round(spreadM), count: valid.length };
 }
 
 async function requireGps_(context) {
   try {
-    const pos = await getCurrentPositionAsync({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
-    const lat = pos.coords.latitude;
-    const lng = pos.coords.longitude;
-    const acc = pos.coords.accuracy;
+    const samples = await collectGpsSamples_();
+    const summary = summarizeGpsSamples_(samples);
+    const lat = summary.best.lat;
+    const lng = summary.best.lng;
+    const acc = summary.best.accuracy;
     if (!isFinite(lat) || !isFinite(lng)) throw new Error('Invalid coordinates');
+    if (isFinite(acc) && acc > GPS_REJECT_ACCURACY_M) throw new Error('GPS_LOW_ACCURACY');
+    if (summary.spreadM > GPS_MAX_SAMPLE_SPREAD_M) throw new Error('GPS_UNSTABLE_SAMPLES');
 
-// Store latest GPS on session (used for submission)
     if (!session) session = {};
     session.lat = lat;
     session.lng = lng;
     session.accuracy = (isFinite(acc) ? acc : '');
+    session.gpsCapturedAt = new Date().toISOString();
+    session.gpsSampleCount = summary.count;
+    session.gpsSpreadM = summary.spreadM;
 
-// weak accuracy -> warning only (yellow)
     if (isFinite(acc) && acc > GPS_WEAK_ACCURACY_M) {
-      showToast(t('Isyarat GPS lemah (Noted). Sila bergerak ke kawasan terbuka jika boleh.', 'Weak GPS signal (Noted). Move to an open area if possible.'), 'warning');
+      showToast(t('Isyarat GPS lemah tetapi masih dalam had. Sila bergerak ke kawasan terbuka jika boleh.', 'GPS signal is weak but within the allowed limit. Move to an open area if possible.'), 'warning');
     }
 
-return { ok: true, lat, lng, accuracy: (isFinite(acc) ? acc : '') };
+    return { ok: true, lat, lng, accuracy: (isFinite(acc) ? acc : ''), sampleCount: summary.count, spreadM: summary.spreadM, capturedAt: session.gpsCapturedAt };
   } catch (err) {
     console.log('GPS required error:', err);
-    showToast(
-      t('Sila hidupkan GPS/Location dan benarkan akses lokasi untuk meneruskan pemeriksaan.', 'Please enable GPS/Location and allow location access to continue.'),
-      'error'
-    );
-    return { ok: false, error: String(err && err.message ? err.message : err) };
+    const code = String(err && err.message ? err.message : err);
+    const msg = code === 'GPS_LOW_ACCURACY'
+      ? t('Ketepatan GPS terlalu lemah. Sila bergerak ke kawasan terbuka dan cuba semula.', 'GPS accuracy is too weak. Move to an open area and try again.')
+      : code === 'GPS_UNSTABLE_SAMPLES'
+        ? t('Bacaan GPS tidak stabil. Sila tunggu beberapa saat dan cuba semula.', 'GPS readings are unstable. Wait a few seconds and try again.')
+        : t('Sila hidupkan GPS/Location dan benarkan akses lokasi untuk meneruskan pemeriksaan.', 'Please enable GPS/Location and allow location access to continue.');
+    showToast(msg, 'error');
+    return { ok: false, error: code };
   }
 }
 
@@ -1160,6 +1258,8 @@ let autoSaveInterval = null;
 let submittedStations = new Set();
 let hasSubmittedCurrent = false;
 let findingsDraft = {}; // itemKey -> { itemKey,type,severity,pic,action,rootCause,dueDate }
+let aiInsightText = '';
+let currentSubmissionId = '';
 let zoneMapScale = 1;
 let zoneMapTranslateX = 0;
 let zoneMapTranslateY = 0;
@@ -1287,6 +1387,155 @@ function endZoneMapDrag() {
 // ============================================
 // AUTO-SAVE SYSTEM
 // ============================================
+
+function openKkpasDb_() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(KKPAS_DB_NAME, KKPAS_DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('offlineQueue')) db.createObjectStore('offlineQueue', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'key' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('IndexedDB unavailable'));
+  });
+}
+
+async function idbPut_(storeName, value) {
+  const db = await openKkpasDb_();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).put(value);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { const e=tx.error; db.close(); reject(e); };
+  });
+}
+
+async function idbGet_(storeName, key) {
+  const db = await openKkpasDb_();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).get(key);
+    req.onsuccess = () => { const v=req.result; db.close(); resolve(v); };
+    req.onerror = () => { const e=req.error; db.close(); reject(e); };
+  });
+}
+
+async function idbDelete_(storeName, key) {
+  const db = await openKkpasDb_();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).delete(key);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { const e=tx.error; db.close(); reject(e); };
+  });
+}
+
+async function idbGetAll_(storeName) {
+  const db = await openKkpasDb_();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).getAll();
+    req.onsuccess = () => { const v=req.result || []; db.close(); resolve(v); };
+    req.onerror = () => { const e=req.error; db.close(); reject(e); };
+  });
+}
+
+function updateNetworkStateUi_() {
+  const chip = document.getElementById('networkStateChip');
+  if (!chip) return;
+  const online = navigator.onLine;
+  chip.textContent = online ? '● Online' : '● Offline';
+  chip.classList.toggle('offline', !online);
+}
+
+function showSyncBanner_(text, timeout=3500) {
+  const el=document.getElementById('syncBanner'); if(!el) return;
+  el.textContent=text; el.classList.add('show');
+  if(timeout) setTimeout(()=>el.classList.remove('show'),timeout);
+}
+
+async function registerOfflineSync_() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if ('sync' in reg) {
+      try { await reg.sync.register('kkpas-offline-sync'); } catch (_) {}
+    }
+    if (reg.active) reg.active.postMessage({ type: 'SYNC_KKPAS_QUEUE' });
+  } catch (e) { console.warn('Offline sync registration failed', e); }
+}
+
+function newSubmissionId_() {
+  try { if (crypto && typeof crypto.randomUUID === 'function') return 'SUB-' + crypto.randomUUID(); } catch (_) {}
+  return 'SUB-' + Date.now() + '-' + Math.random().toString(36).slice(2,12);
+}
+
+async function queueInspectionOffline_(basePayload) {
+  const queueId = String(basePayload.clientSubmissionId || currentSubmissionId || newSubmissionId_());
+  basePayload.clientSubmissionId = queueId;
+  const record = {
+    id: queueId,
+    createdAt: new Date().toISOString(),
+    stationKey: `${session.month}-${currentTeam.code}-${currentStation}`,
+    payload: basePayload,
+    photos: photos.map((p, idx) => ({
+      id:p.id, data:p.data, comment:p.comment||'', size:p.size||0, source:p.source||'', filename:p.filename||`photo_${idx+1}.jpg`,
+      reviewAnalysis:p.reviewAnalysis||null, reviewAccepted:p.reviewAccepted||null, reviewedAt:p.reviewedAt||''
+    })),
+    uploadedPhotoUrls: [],
+    status: 'QUEUED',
+    attempts: 0,
+    nextAttemptAt: '',
+    lastError: ''
+  };
+  await idbPut_('offlineQueue', record);
+  await clearDraft();
+  submittedStations.add(record.stationKey);
+  localStorage.setItem('dklpo_submitted_stations', JSON.stringify([...submittedStations]));
+  hasSubmittedCurrent = true;
+  await registerOfflineSync_();
+  showSyncBanner_(t('Pemeriksaan disimpan offline dan akan dihantar apabila internet kembali.', 'Inspection saved offline and will sync when internet returns.'), 6000);
+  return record;
+}
+
+async function getOfflineQueueCount_() {
+  try { return (await idbGetAll_('offlineQueue')).length; } catch (_) { return 0; }
+}
+
+function isLikelyNetworkError_(err) {
+  const msg=String(err&&err.message?err.message:err||'');
+  return !navigator.onLine || /Failed to fetch|NetworkError|Load failed|AbortError|CORS|timeout|timed out/i.test(msg);
+}
+
+function buildInspectionPayload_() {
+  const payload = {
+    action: 'submitInspection',
+    month: session.month,
+    station: currentStation,
+    inspectorName: session.inspectorName,
+    teamCode: currentTeam.code,
+    rating: currentRating,
+    comment: document.getElementById('inspectComment').value,
+    checklist: Object.entries(checklistData).map(([k, v]) => ({ item: k, status: v })),
+    overall: Object.values(checklistData).some(v => v === 'Tidak Memuaskan') ? 'NOT_OK' : 'OK',
+    lat: session.lat,
+    lng: session.lng,
+    gpsAccuracy: session.accuracy,
+    gpsCapturedAt: session.gpsCapturedAt || new Date().toISOString(),
+    gpsSampleCount: session.gpsSampleCount || 0,
+    gpsSpreadM: session.gpsSpreadM || 0,
+    clientSubmissionId: currentSubmissionId || (currentSubmissionId = newSubmissionId_()),
+    photoCount: photos.length,
+    timestamp: new Date().toISOString(),
+    inspectionLang: inspectionLang,
+    aiInsight: aiInsightText || ''
+  };
+  payload.findings = JSON.stringify(Object.values(findingsDraft || {}));
+  return payload;
+}
+
 function startAutoSave() {
   autoSaveInterval = setInterval(() => saveDraft(), 60000);
 }
@@ -1298,109 +1547,96 @@ function stopAutoSave() {
   }
 }
 
-function saveDraft() {
+async function saveDraft() {
   if (!currentStation || hasSubmittedCurrent) return;
-
-const draft = {
-    station: currentStation,
-    checklist: checklistData,
-    findings: findingsDraft,
-    photos: photos.map(p => ({
-      id: p.id, comment: p.comment, size: p.size, source: p.source, filename: p.filename,
-      reviewState: p.reviewState || 'idle', reviewAnalysis: p.reviewAnalysis || null, reviewAccepted: p.reviewAccepted || null,
-      reviewedAt: p.reviewedAt || ''
-    })),
-    rating: currentRating,
-    comment: document.getElementById('inspectComment').value,
-    timestamp: Date.now(),
-    session: session,
-    inspectionLang: inspectionLang
-  };
-
-sessionStorage.setItem('dklpo_draft', JSON.stringify(draft));
-  showAutoSaveIndicator('saved');
-}
-
-function showAutoSaveIndicator(status) {
-  const indicator = document.getElementById('autoSaveIndicator');
-  const icon = document.getElementById('autoSaveIcon');
-  const text = document.getElementById('autoSaveText');
-  indicator.classList.add('show');
-  indicator.className = 'autosave-indicator show ' + status;
-  if (status === 'saving') {
-    icon.textContent = '💾';
-    text.textContent = t('Menyimpan...', 'Saving...');
-  } else {
-    icon.textContent = '✓';
-    text.textContent = t('Disimpan', 'Saved');
-    setTimeout(() => indicator.classList.remove('show'), 2000);
+  try {
+    const draft = {
+      id: KKPAS_DRAFT_KEY,
+      station: currentStation,
+      checklist: checklistData,
+      findings: findingsDraft,
+      photos: photos.map(p => ({ ...p })),
+      rating: currentRating,
+      comment: document.getElementById('inspectComment').value,
+      aiInsight: aiInsightText || '',
+      submissionId: currentSubmissionId || '',
+      timestamp: Date.now(),
+      session: session,
+      inspectionLang: inspectionLang
+    };
+    await idbPut_('drafts', draft);
+    try { sessionStorage.setItem('dklpo_draft_exists', String(draft.timestamp)); } catch (_) {}
+    showAutoSaveIndicator('saved');
+  } catch (e) {
+    console.error('Draft save failed:', e);
+    showToast(t('Draf gagal disimpan pada peranti.', 'Draft could not be saved on this device.'), 'warning');
   }
 }
 
-function checkForDraft() {
-  const draft = sessionStorage.getItem('dklpo_draft');
-  if (draft) {
-    const data = JSON.parse(draft);
-    if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+async function checkForDraft() {
+  try {
+    const data = await idbGet_('drafts', KKPAS_DRAFT_KEY);
+    if (data && Date.now() - Number(data.timestamp || 0) < 24 * 60 * 60 * 1000) {
       document.getElementById('draftModal').classList.add('active');
       return true;
-    } else {
-      sessionStorage.removeItem('dklpo_draft');
     }
-  }
+    if (data) await idbDelete_('drafts', KKPAS_DRAFT_KEY);
+  } catch (e) { console.warn('Draft check failed:', e); }
   return false;
 }
 
-function restoreDraft() {
-  const draft = JSON.parse(sessionStorage.getItem('dklpo_draft'));
+async function restoreDraft() {
+  const draft = await idbGet_('drafts', KKPAS_DRAFT_KEY);
   if (!draft) return;
 
-if (draft.session && !session) session = draft.session;
+  if (draft.session && !session) session = draft.session;
   if (draft.inspectionLang) inspectionLang = draft.inspectionLang;
+  currentTeam = session && session.team ? session.team : currentTeam;
+  document.getElementById('pageLogin').classList.remove('active');
+  document.getElementById('pageInspection').classList.add('active');
+  document.getElementById('btnLogout').style.display = 'block';
+  loadStation(draft.station);
 
-loadStation(draft.station);
-
-checklistData = draft.checklist || {};
+  checklistData = draft.checklist || {};
   findingsDraft = draft.findings || {};
+  photos = Array.isArray(draft.photos) ? draft.photos : [];
+  aiInsightText = String(draft.aiInsight || '');
+  currentSubmissionId = String(draft.submissionId || currentSubmissionId || newSubmissionId_());
 
-// Ensure any NOT OK checklist item has a finding draft (backward compatible)
   Object.entries(checklistData).forEach(([k, v]) => {
     if (v === 'Tidak Memuaskan' && !findingsDraft[k]) {
       findingsDraft[k] = { itemKey: k, type: 'NCR', severity: 'Medium', pic: '', action: '', rootCause: '', dueDate: '' };
     }
   });
 
-// Restore select UI states
-  Object.entries(checklistData).forEach(([key, value]) => {
-    const selects = document.querySelectorAll('.status-select');
-    selects.forEach(select => {
-      const itemText = select.closest('.check-option').querySelector('label').textContent;
-      if (key.includes(itemText)) select.value = value;
-    });
-  });
+  Object.entries(checklistData).forEach(([key, value]) => setChecklistUiValueByKey(key, value));
 
-if (draft.rating) {
-    currentRating = draft.rating;
-    const ratingOptions = document.querySelectorAll('.rating-option');
-    if (ratingOptions[draft.rating - 1]) ratingOptions[draft.rating - 1].classList.add('active');
+  if (draft.rating) {
+    currentRating = Number(draft.rating);
+    document.querySelectorAll('.rating-option').forEach(el => el.classList.remove('active'));
+    const chosen = document.querySelector(`.rating-option[data-rating="${currentRating}"]`);
+    if (chosen) chosen.classList.add('active');
   }
 
-document.getElementById('inspectComment').value = draft.comment || '';
-
-renderIssueSection();
-  showToast(t('Draf dipulihkan', 'Draft restored'), 'success');
+  document.getElementById('inspectComment').value = draft.comment || '';
+  updateAiInsightUi_();
+  renderIssueSection();
+  renderPhotoList();
+  showToast(t('Draf lengkap dipulihkan termasuk gambar.', 'Full draft restored including photos.'), 'success');
   document.getElementById('draftModal').classList.remove('active');
   startAutoSave();
 }
 
-function discardDraft() {
-  sessionStorage.removeItem('dklpo_draft');
+async function discardDraft() {
+  await idbDelete_('drafts', KKPAS_DRAFT_KEY).catch(()=>{});
+  try { sessionStorage.removeItem('dklpo_draft_exists'); } catch (_) {}
   document.getElementById('draftModal').classList.remove('active');
   startAutoSave();
 }
 
 async function clearDraft() {
-  sessionStorage.removeItem('dklpo_draft');
+  await idbDelete_('drafts', KKPAS_DRAFT_KEY).catch(()=>{});
+  try { sessionStorage.removeItem('dklpo_draft_exists'); } catch (_) {}
   stopAutoSave();
 }
 
@@ -1474,7 +1710,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       session = JSON.parse(saved);
       if (session.expiry && Date.now() < session.expiry) {
         currentTeam = session.team;
-        const hasDraft = checkForDraft();
+        const hasDraft = await checkForDraft();
         if (!hasDraft) {
           showInspectionPage();
         }
@@ -1488,6 +1724,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
 // Prevent accidental back button
+  updateNetworkStateUi_();
+  window.addEventListener('online', async () => { updateNetworkStateUi_(); showSyncBanner_(t('Internet kembali. Menyegerakkan pemeriksaan offline...', 'Internet restored. Syncing offline inspections...')); await registerOfflineSync_(); refreshNotificationCentre_(false); });
+  window.addEventListener('offline', () => { updateNetworkStateUi_(); showSyncBanner_(t('Offline: pemeriksaan masih boleh diteruskan dan akan disimpan pada peranti.', 'Offline: inspection can continue and will be stored on this device.'), 5000); });
+  setTimeout(() => { refreshNotificationCentre_(false); registerPeriodicReminder_(); registerOfflineSync_(); }, 800);
+
   window.addEventListener('beforeunload', (e) => {
     if (currentStation && !hasSubmittedCurrent && (Object.keys(checklistData).length > 0 || photos.length > 0)) {
       e.preventDefault();
@@ -1567,10 +1808,10 @@ function completeLogin() {
   showInspectionPage();
 }
 
-function doLogout(options = {}) {
+async function doLogout(options = {}) {
   const ask = options.confirm !== false;
   if (!ask || confirm(t('Pasti untuk keluar?', 'Confirm logout?'))) {
-    clearDraft();
+    await clearDraft();
     localStorage.removeItem('dklpo_mobile_session');
     session = null;
     currentTeam = null;
@@ -1652,6 +1893,8 @@ currentStation = station;
   photos = [];
   checklistData = {};
   findingsDraft = {};              // NEW
+  aiInsightText = '';
+  currentSubmissionId = newSubmissionId_();
   hasSubmittedCurrent = false;
 
 // Show submit warning
@@ -1690,6 +1933,7 @@ toggleChecklist(0);
 
 document.querySelectorAll('.rating-option').forEach(el => el.classList.remove('active'));
   document.getElementById('inspectComment').value = '';
+  updateAiInsightUi_();
   renderPhotoList();
 
 renderIssueSection();            // NEW (keeps hidden when empty)
@@ -1744,6 +1988,42 @@ function setRating(n, element) {
   document.querySelectorAll('.rating-option').forEach(el => el.classList.remove('active'));
   element.classList.add('active');
   saveDraft();
+}
+
+
+function setRatingByValue_(n) {
+  const val = Math.max(1, Math.min(5, Number(n) || 0));
+  if (!val) return false;
+  currentRating = val;
+  document.querySelectorAll('.rating-option').forEach(el => el.classList.remove('active'));
+  const chosen = document.querySelector(`.rating-option[data-rating="${val}"]`);
+  if (chosen) chosen.classList.add('active');
+  saveDraft();
+  return true;
+}
+
+function updateAiInsightText(value) {
+  aiInsightText = String(value || '');
+  updateAiInsightUi_();
+  saveDraft();
+}
+
+function updateAiInsightUi_() {
+  const wrap=document.getElementById('aiInsightSection');
+  const box=document.getElementById('aiInsightText');
+  if (!wrap || !box) return;
+  box.value=aiInsightText || '';
+  wrap.style.display = aiInsightText ? 'block' : 'none';
+}
+
+function appendGeneralComment_(text) {
+  const box=document.getElementById('inspectComment');
+  const val=String(text||'').trim();
+  if(!box||!val) return false;
+  const existing=String(box.value||'').trim();
+  if (!existing.includes(val)) box.value = existing ? (existing + '\n\n' + val) : val;
+  saveDraft();
+  return true;
 }
 
 // ============================================
@@ -1822,6 +2102,14 @@ function updateFindingField(keyEncoded, field, value) {
   saveDraft();
 }
 
+
+function showOfflineQueuedSuccessModal_() {
+  document.getElementById('successTitle').innerHTML = '📥 <span>' + t('Disimpan Offline','Saved Offline') + '</span>';
+  document.getElementById('successMsg').textContent = t('Pemeriksaan lengkap disimpan pada peranti. Ia akan dihantar automatik apabila internet tersedia.', 'The full inspection is stored on this device and will sync automatically when internet is available.');
+  document.getElementById('successNext').innerHTML = '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:12px;color:var(--warn);font-size:13px;">' + t('Jangan padam data browser/app sebelum status sync berjaya.', 'Do not clear browser/app data before the sync succeeds.') + '</div>';
+  document.getElementById('successModal').classList.add('active');
+}
+
 function showSubmitSuccessModal(result) {
   document.getElementById('successMsg').textContent =
     t('Terima kasih. Tekan OK untuk log keluar.', 'Thank you. Press OK to logout.');
@@ -1857,16 +2145,16 @@ function closeSuccessModal(shouldLogout) {
 // PHOTO SYSTEM - ULTRA COMPRESSION
 // ============================================
 function triggerCamera() {
-  if (photos.length >= 8) {
-    showToast     (t('Maksimum 8 gambar', 'Maximum 8 photos'), 'warning');
+  if (photos.length >= MAX_PHOTOS) {
+    showToast(t(`Maksimum ${MAX_PHOTOS} gambar`, `Maximum ${MAX_PHOTOS} photos`), 'warning');
     return;
   }
   document.getElementById('cameraInput').click();
 }
 
 function triggerGallery() {
-  if (photos.length >= 8) {
-    showToast(t('Maksimum 8 gambar', 'Maximum 8 photos'), 'warning');
+  if (photos.length >= MAX_PHOTOS) {
+    showToast(t(`Maksimum ${MAX_PHOTOS} gambar`, `Maximum ${MAX_PHOTOS} photos`), 'warning');
     return;
   }
   document.getElementById('galleryInput').click();
@@ -1876,9 +2164,9 @@ async function handlePhoto(input, source) {
   const files = Array.from((input && input.files) || []);
   if (!files.length) return;
 
-  if (photos.length + files.length > 8) {
-    showToast(t(`Hanya boleh tambah ${8 - photos.length} gambar lagi`, `Can only add ${8 - photos.length} more photos`), 'warning');
-    files.splice(Math.max(0, 8 - photos.length));
+  if (photos.length + files.length > MAX_PHOTOS) {
+    showToast(t(`Hanya boleh tambah ${MAX_PHOTOS - photos.length} gambar lagi`, `Can only add ${MAX_PHOTOS - photos.length} more photos`), 'warning');
+    files.splice(Math.max(0, MAX_PHOTOS - photos.length));
   }
 
   let addedCount = 0;
@@ -2019,7 +2307,7 @@ function renderPhotoReview(photo) {
   const mismatch=getReviewMismatchMessage(review), accepted=photo.reviewAccepted||{};
   const q=review.imageQuality||{}, conf=Number.isFinite(Number(review.confidence))?Math.max(0,Math.min(100,Math.round(Number(review.confidence)))):0;
   const hazardHtml=hazards.length?`<ul class="review-hazard-list">${hazards.map(h=>`<li>${escapeHtml(h)}</li>`).join('')}</ul>`:`<span>${t('Tiada hazard yang dapat dikenal pasti dengan yakin daripada gambar ini.','No hazard could be identified confidently from this image.')}</span>`;
-  const acceptedHtml=(accepted.all||accepted.comment||accepted.checklist||accepted.finding)?`<div class="review-accepted">✓ ${t('Sebahagian atau semua cadangan telah digunakan oleh pemeriksa.','Some or all suggestions have been applied by the inspector.')}</div>`:'';
+  const acceptedHtml=(accepted.all||accepted.comment||accepted.generalComment||accepted.checklist||accepted.finding||accepted.rating||accepted.insight)?`<div class="review-accepted">✓ ${t('Sebahagian atau semua cadangan telah digunakan oleh pemeriksa.','Some or all suggestions have been applied by the inspector.')}</div>`:'';
   return `<div class="review-result"><div class="review-result-head"><span class="review-title">${t('Hasil Semakan','Review Result')}</span><span class="review-badge review-confidence">${conf}%</span></div><div class="review-result-body">
     ${q.status==='RETAKE'?`<div class="review-warning">📷 ${escapeHtml(q.message||t('Gambar kurang sesuai untuk penilaian. Ambil semula gambar.','Image is not suitable for reliable assessment. Retake the image.'))}</div>`:''}
     ${mismatch?`<div class="review-warning">⚠️ ${escapeHtml(mismatch)}</div>`:''}${acceptedHtml}
@@ -2031,8 +2319,10 @@ function renderPhotoReview(photo) {
     <div class="review-row"><strong>Severity / NCR-CAP-PAR</strong>${escapeHtml(review.severity||'None')} / ${escapeHtml(review.findingType||'None')}</div>
     <div class="review-row"><strong>${t('Tindakan Dicadangkan','Suggested Action')}</strong>${escapeHtml(review.actionRequired||'-')}</div>
     ${review.rootCauseSuggestion?`<div class="review-row"><strong>${t('Kemungkinan Punca Akar','Possible Root Cause')}</strong>${escapeHtml(review.rootCauseSuggestion)}</div>`:''}
+    <div class="review-row"><strong>${t('Rating Dicadangkan','Suggested Rating')}</strong>${Number(review.suggestedRating)>0 ? escapeHtml(review.suggestedRating) + '/5' : '-'}</div>
+    ${review.aiInsight?`<div class="review-row"><strong>AI Insight</strong>${escapeHtml(review.aiInsight)}</div>`:''}
     ${review.limitations?`<div class="review-row"><strong>${t('Had Penilaian','Assessment Limitation')}</strong>${escapeHtml(review.limitations)}</div>`:''}
-    <div class="review-actions"><button type="button" onclick="useReviewComment(${photo.id})">✍️ ${t('Guna Komen','Use Comment')}</button><button type="button" onclick="applyReviewChecklist(${photo.id})">☑️ ${t('Guna Status Checklist','Use Checklist Status')}</button><button type="button" onclick="applyReviewFinding(${photo.id})">🚨 ${t('Isi NCR/CAP/PAR','Fill NCR/CAP/PAR')}</button><button class="success" type="button" onclick="acceptAllReviewSuggestions(${photo.id})">✓ ${t('Terima Semua Cadangan','Accept All Suggestions')}</button><button class="primary" type="button" onclick="reviewPhoto(${photo.id})">↻ ${t('Semak Semula','Review Again')}</button></div>
+    <div class="review-actions"><button type="button" onclick="useReviewComment(${photo.id})">🖼️ ${t('Komen Gambar','Photo Comment')}</button><button type="button" onclick="applyReviewGeneralComment(${photo.id})">✍️ ${t('Komen Keseluruhan','General Comment')}</button><button type="button" onclick="applyReviewChecklist(${photo.id})">☑️ ${t('Guna Status Checklist','Use Checklist Status')}</button><button type="button" onclick="applyReviewFinding(${photo.id})">🚨 ${t('Isi NCR/CAP/PAR','Fill NCR/CAP/PAR')}</button><button type="button" onclick="applyReviewRating(${photo.id})">⭐ ${t('Guna Rating','Use Rating')}</button><button type="button" onclick="applyReviewInsight(${photo.id})">🤖 AI Insight</button><button class="success" type="button" onclick="acceptAllReviewSuggestions(${photo.id})">✓ ${t('Terima Semua Cadangan','Accept All Suggestions')}</button><button class="primary" type="button" onclick="reviewPhoto(${photo.id})">↻ ${t('Semak Semula','Review Again')}</button></div>
   </div></div>`;
 }
 
@@ -2041,7 +2331,7 @@ async function reviewPhoto(photoId) {
   if (!photo||!photo.data) return showToast(t('Gambar tidak ditemui.','Image not found.'),'error');
   photo.reviewState='loading'; photo.reviewError=''; renderPhotoList();
   try {
-    const result=await postToWebApp({action:PHOTO_REVIEW_ACTION,station:currentStation,inspectionLang,imageData:normalizeDataUrl(photo.data),checklist:JSON.stringify(getCurrentChecklistForReview()),existingChecklist:JSON.stringify(checklistData||{})},{timeoutMs:90000,retries:2});
+    const result=await postToWebApp({action:PHOTO_REVIEW_ACTION,station:currentStation,inspectionLang,imageData:normalizeDataUrl(photo.data),checklist:JSON.stringify(getCurrentChecklistForReview()),existingChecklist:JSON.stringify(checklistData||{})},{timeoutMs:45000,retries:1});
     if (!result||!result.ok) throw new Error((result&&result.error)||t('Semakan gambar tidak memberi respons yang sah.','The image review did not return a valid response.'));
     const analysis=result.analysis;
     if (!analysis||typeof analysis!=='object') throw new Error(t('Format hasil semakan tidak sah.','Invalid review result format.'));
@@ -2062,6 +2352,42 @@ function useReviewComment(photoId) {
   photo.comment=String(photo.reviewAnalysis.suggestedComment||photo.reviewAnalysis.observation||'').trim();
   photo.reviewAccepted=photo.reviewAccepted||{}; photo.reviewAccepted.comment=true;
   saveDraft(); renderPhotoList(); showToast(t('Komen dimasukkan. Anda masih boleh edit.','Comment inserted. You can still edit it.'),'success');
+}
+
+
+function applyReviewGeneralComment(photoId) {
+  const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  const review=photo.reviewAnalysis;
+  const text=String(review.suggestedComment||review.observation||'').trim();
+  if(!text)return false;
+  const ok=appendGeneralComment_(text);
+  photo.reviewAccepted=photo.reviewAccepted||{}; photo.reviewAccepted.generalComment=!!ok;
+  saveDraft(); renderPhotoList();
+  if(ok) showToast(t('Komen keseluruhan diisi daripada cadangan AI.','General comment filled from the AI suggestion.'),'success');
+  return ok;
+}
+
+function applyReviewRating(photoId) {
+  const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  const rating=Number(photo.reviewAnalysis.suggestedRating||0);
+  if(rating<1||rating>5){showToast(t('AI tidak mempunyai bukti mencukupi untuk mencadangkan rating.','AI does not have enough evidence to suggest a rating.'),'warning');return false;}
+  const ok=setRatingByValue_(rating);
+  photo.reviewAccepted=photo.reviewAccepted||{}; photo.reviewAccepted.rating=!!ok;
+  saveDraft(); renderPhotoList();
+  if(ok) showToast(t(`Rating ${rating}/5 telah digunakan.`,`Rating ${rating}/5 applied.`),'success');
+  return ok;
+}
+
+function applyReviewInsight(photoId) {
+  const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  const insight=String(photo.reviewAnalysis.aiInsight||'').trim();
+  if(!insight)return false;
+  if(!aiInsightText.includes(insight)) aiInsightText = aiInsightText ? (aiInsightText + '\n\n' + insight) : insight;
+  updateAiInsightUi_();
+  photo.reviewAccepted=photo.reviewAccepted||{}; photo.reviewAccepted.insight=true;
+  saveDraft(); renderPhotoList();
+  showToast(t('AI Insight dimasukkan.','AI Insight applied.'),'success');
+  return true;
 }
 
 function applyReviewChecklist(photoId) {
@@ -2096,7 +2422,15 @@ function applyReviewFinding(photoId) {
 
 function acceptAllReviewSuggestions(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return;
-  useReviewComment(photoId); const ok=applyReviewChecklist(photoId); if(photo.reviewAnalysis.suggestedStatus==='Tidak Memuaskan') applyReviewFinding(photoId); photo.reviewAccepted=photo.reviewAccepted||{}; photo.reviewAccepted.all=!!ok; saveDraft(); renderPhotoList();
+  useReviewComment(photoId);
+  applyReviewGeneralComment(photoId);
+  const checklistOk=applyReviewChecklist(photoId);
+  if(photo.reviewAnalysis.suggestedStatus==='Tidak Memuaskan') applyReviewFinding(photoId);
+  applyReviewRating(photoId);
+  applyReviewInsight(photoId);
+  photo.reviewAccepted=photo.reviewAccepted||{};
+  photo.reviewAccepted.all=!!checklistOk;
+  saveDraft(); renderPhotoList();
 }
 
 function renderPhotoList() {
@@ -2225,6 +2559,16 @@ const totalItems = document.querySelectorAll('.status-select').length;
     }
   }
 
+// Offline-first submission: save the complete inspection package locally before any upload.
+  if (!navigator.onLine) {
+    const gpsNow = await requireGps_('submit');
+    if (!gpsNow.ok) return;
+    const offlinePayload = buildInspectionPayload_();
+    await queueInspectionOffline_(offlinePayload);
+    showOfflineQueuedSuccessModal_();
+    return;
+  }
+
 isSubmitting = true;
   hasSubmittedCurrent = true;
   const btn = document.getElementById('btnSubmit');
@@ -2239,29 +2583,7 @@ let payload = null;
     const gpsNow = await requireGps_('submit');
     if (!gpsNow.ok) throw new Error('GPS_REQUIRED');
 
-payload = {
-      action: 'submitInspection',
-      month: session.month,
-      station: currentStation,
-      inspectorName: session.inspectorName,
-      teamCode: currentTeam.code,
-      rating: currentRating,
-      comment: document.getElementById('inspectComment').value,
-      checklist: Object.entries(checklistData).map(([k, v]) => ({ item: k, status: v })),
-      overall: 'OK',
-      lat: session.lat,
-      lng: session.lng,
-      gpsAccuracy: session.accuracy,
-      photoCount: photos.length,
-      timestamp: new Date().toISOString(),
-      inspectionLang: inspectionLang
-    };
-
-const hasIssues = Object.values(checklistData).some(v => v === 'Tidak Memuaskan');
-    payload.overall = hasIssues ? 'NOT_OK' : 'OK';
-
-// Add findings to payload
-    payload.findings = JSON.stringify(Object.values(findingsDraft || {}));
+payload = buildInspectionPayload_();
 
 const photoUrls = [];
     if (photos.length > 0) {
@@ -2310,6 +2632,14 @@ if (result.ok) {
     hasSubmittedCurrent = false;
     if (String(err && err.message) === 'GPS_REQUIRED') {
       showToast(t('GPS diperlukan. Sila hidupkan GPS/Location.', 'GPS is required. Please enable GPS/Location.'), 'error');
+    } else if (isLikelyNetworkError_(err)) {
+      try {
+        const offlinePayload = payload || buildInspectionPayload_();
+        await queueInspectionOffline_(offlinePayload);
+        showOfflineQueuedSuccessModal_();
+      } catch (queueErr) {
+        showToast(t('Gagal menyimpan offline: ' + queueErr.message, 'Failed to save offline: ' + queueErr.message), 'error');
+      }
     } else {
       showToast(t('Gagal: ' + err.message, 'Failed: ' + err.message), 'error');
     }
@@ -2328,6 +2658,7 @@ if (result.ok) {
 async function uploadPhotoWithRetry(photo, index, retries = 3) {
   const payload = {
     action: 'uploadPhoto',
+    uploadKey: `${currentSubmissionId || (currentSubmissionId = newSubmissionId_())}-P${index}`,
     month: session.month,
     station: currentStation,
     inspectorName: session.inspectorName,
@@ -2404,6 +2735,12 @@ async function postToWebApp(payload, options = {}) {
         throw new Error((data && data.error) || `HTTP ${response.status}`);
       }
 
+      if (data && data.ok === false && data.retryable && attempt < retries) {
+        const retryDelay = Math.max(Number(data.retryAfterMs || 0), 1200 * attempt);
+        await new Promise(r => setTimeout(r, retryDelay));
+        continue;
+      }
+
       return data;
     } catch (err) {
       clearTimeout(timeoutId);
@@ -2443,6 +2780,112 @@ if (nextStation) {
   }
 }
 
+
+function handleNotificationBackdrop(event){ if(event && event.target && event.target.id==='notificationModal') closeNotificationCentre(); }
+function openNotificationCentre(){ const m=document.getElementById('notificationModal'); if(m)m.classList.add('active'); document.body.style.overflow='hidden'; refreshNotificationCentre_(true); }
+function closeNotificationCentre(){ const m=document.getElementById('notificationModal'); if(m)m.classList.remove('active'); document.body.style.overflow=''; }
+
+async function enableSystemNotifications(){
+  if(!('Notification' in window)){showToast(t('Browser ini tidak menyokong notifikasi sistem.','This browser does not support system notifications.'),'warning');return;}
+  try{
+    const permission=await Notification.requestPermission();
+    if(permission==='granted'){
+      showToast(t('Notifikasi sistem diaktifkan.','System notifications enabled.'),'success');
+      await registerPeriodicReminder_();
+      await refreshNotificationCentre_(false);
+    } else showToast(t('Kebenaran notifikasi tidak diberikan.','Notification permission was not granted.'),'warning');
+  }catch(e){showToast(t('Gagal mengaktifkan notifikasi.','Failed to enable notifications.'),'error');}
+}
+
+async function registerPeriodicReminder_(){
+  if(!('serviceWorker' in navigator)) return;
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    if(reg.periodicSync){
+      try{await reg.periodicSync.register('kkpas-month-end-reminder',{minInterval:24*60*60*1000});}catch(e){console.warn('Periodic sync not granted',e);}
+    }
+  }catch(e){console.warn('Periodic reminder registration failed',e);}
+}
+
+function renderNotificationCentre_(data){
+  const body=document.getElementById('notificationCentreBody'); if(!body)return;
+  const reminder=data&&data.reminder?data.reminder:{};
+  const pending=Array.isArray(reminder.pendingTeams)?reminder.pendingTeams:[];
+  const rows=Array.isArray(data&&data.notifications)?data.notifications:[];
+  const badge=document.getElementById('notificationBadge');
+  if(badge){badge.textContent=String(pending.length);badge.classList.toggle('show',pending.length>0 && reminder.active);}
+  if(!reminder.active){
+    body.innerHTML=`<div class="empty-state"><div class="icon">✅</div><div>${t('Reminder pemeriksaan akan aktif 5 hari sebelum hujung bulan.','Inspection reminders activate 5 days before month end.')}</div></div>`;
+    return;
+  }
+  if(!pending.length){
+    body.innerHTML=`<div class="empty-state"><div class="icon">✅</div><div>${t('Semua kumpulan telah selesai pemeriksaan bulan ini.','All teams have completed this month\'s inspection.')}</div></div>`;
+    return;
+  }
+  const teamHtml=pending.map(p=>`<div class="notification-team"><b>${escapeHtml(p.teamName||p.teamCode||'-')}</b><span>${t('Stesen belum diperiksa','Pending station')}: </span><span class="notification-station">${escapeHtml((p.stations||[]).join(', ')||p.station||'-')}</span></div>`).join('');
+  const history=rows.slice(0,7).map(r=>{const hp=r.details&&Array.isArray(r.details.pendingTeams)?r.details.pendingTeams:[];const hteams=hp.map(p=>`<div class="notification-team"><b>${escapeHtml(p.teamName||p.teamCode||'-')}</b><span class="notification-station">${escapeHtml((p.stations||[]).join(', ')||p.station||'-')}</span></div>`).join('');return `<div class="notification-item"><div class="date">${escapeHtml(r.notificationDate||r.createdDate||'')}</div>${hteams||`<b>${escapeHtml(r.message||'KKPAS Reminder')}</b>`}</div>`;}).join('');
+  body.innerHTML=`<div class="notification-item"><div class="date">${t('Baki hari ke hujung bulan','Days to month end')}: ${Number(reminder.daysUntilEnd)}</div><b>⚠️ ${pending.length} ${t('kumpulan belum selesai','teams pending')}</b>${teamHtml}</div>${history?`<div style="margin-top:16px;font-weight:700;">${t('Sejarah Reminder','Reminder History')}</div>${history}`:''}`;
+}
+
+async function appendOfflineQueueStatusToNotificationCentre_(){
+  const body=document.getElementById('notificationCentreBody'); if(!body)return;
+  let rows=[]; try{rows=await idbGetAll_('offlineQueue');}catch(_){return;}
+  if(!rows.length)return;
+  const queued=rows.filter(r=>r.status!=='DEAD_LETTER');
+  const dead=rows.filter(r=>r.status==='DEAD_LETTER');
+  const items=rows.map(r=>{
+    const station=escapeHtml(r.payload&&r.payload.station||'-');
+    const status=r.status==='DEAD_LETTER'?t('PERLU TINDAKAN','ACTION REQUIRED'):t('Menunggu Sync','Waiting for Sync');
+    const detail=r.status==='DEAD_LETTER'
+      ? `<div style="color:var(--bad);font-size:12px;margin-top:5px;">${escapeHtml(r.lastError||'Sync failed')}</div><button class="btn-secondary" style="margin-top:8px;padding:9px 12px;" onclick="retryOfflineQueueItem_('${escapeHtml(r.id)}')">↻ ${t('Cuba Semula','Retry')}</button>`
+      : `<div style="font-size:12px;color:var(--text-secondary);margin-top:5px;">${t('Percubaan','Attempts')}: ${Number(r.attempts||0)}/5${r.nextAttemptAt?` · ${escapeHtml(r.nextAttemptAt)}`:''}</div>`;
+    return `<div class="notification-team"><b>${station} — ${status}</b>${detail}</div>`;
+  }).join('');
+  body.insertAdjacentHTML('afterbegin',`<div class="notification-item"><div class="date">${t('Offline Sync Queue','Offline Sync Queue')}</div><b>${queued.length} ${t('menunggu','waiting')} · ${dead.length} ${t('perlu tindakan','need action')}</b>${items}</div>`);
+}
+
+async function retryOfflineQueueItem_(id){
+  try{
+    const row=await idbGet_('offlineQueue',id); if(!row)return;
+    row.status='QUEUED'; row.attempts=0; row.nextAttemptAt=''; row.lastError=''; row.deadLetterAt='';
+    await idbPut_('offlineQueue',row);
+    showSyncBanner_(t('Rekod dimasukkan semula ke queue.','Record returned to the sync queue.'),4000);
+    await registerOfflineSync_();
+    await refreshNotificationCentre_(false);
+  }catch(e){showToast(t('Gagal menetapkan retry.','Failed to schedule retry.'),'error');}
+}
+
+async function maybeShowLocalReminder_(data){
+  const r=data&&data.reminder?data.reminder:null;
+  if(!r||!r.active||!Array.isArray(r.pendingTeams)||!r.pendingTeams.length)return;
+  if(!('Notification' in window)||Notification.permission!=='granted'||!('serviceWorker' in navigator))return;
+  const key='kkpas_local_reminder_'+String(r.dateKey||'');
+  if(localStorage.getItem(key)==='1')return;
+  const pendingLines=r.pendingTeams.map(p=>`${p.teamCode||p.teamName||'-'}: ${(p.stations||[]).join(', ')||p.station||'-'}`);
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    await reg.showNotification('KKPAS Monthly Inspection',{body:pendingLines.join(' | '),icon:'https://arleta.site/interactivelink/3333/DKLPO_Master_192.png',badge:'https://arleta.site/interactivelink/3333/DKLPO_Master_192.png',tag:'kkpas-month-end-'+String(r.dateKey||''),renotify:false,data:{url:'./'}});
+    localStorage.setItem(key,'1');
+  }catch(e){console.warn('Local reminder failed',e);}
+}
+
+async function refreshNotificationCentre_(showErrors=true){
+  updateNetworkStateUi_();
+  try{
+    let data=null;
+    if(navigator.onLine){
+      data=await postToWebApp({action:'getNotificationCentre'},{timeoutMs:30000,retries:2});
+      if(data&&data.ok){localStorage.setItem('kkpas_notification_cache',JSON.stringify(data));}
+    }
+    if(!data||!data.ok){const cached=localStorage.getItem('kkpas_notification_cache');if(cached)data=JSON.parse(cached);}
+    if(data){renderNotificationCentre_(data);await appendOfflineQueueStatusToNotificationCentre_();maybeShowLocalReminder_(data);}
+  }catch(e){
+    const cached=localStorage.getItem('kkpas_notification_cache');
+    if(cached){try{renderNotificationCentre_(JSON.parse(cached));await appendOfflineQueueStatusToNotificationCentre_();}catch(_){} }
+    else if(showErrors) showToast(t('Notification Centre tidak dapat dikemas kini.','Notification Centre could not be refreshed.'),'warning');
+  }
+}
+
 // ============================================
 // UTILITIES
 // ============================================
@@ -2471,10 +2914,23 @@ window.onerror = function(msg, url, line, col, error) {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js')
-      .then(registration => console.log('KKPAS Service Worker registered:', registration.scope))
+      .then(registration => { console.log('KKPAS Service Worker registered:', registration.scope); registerOfflineSync_(); registerPeriodicReminder_(); })
       .catch(error => console.warn('KKPAS Service Worker registration failed:', error));
   });
 }
+</script>
+<script>
+navigator.serviceWorker?.addEventListener('message', (event) => {
+  const d=event.data||{};
+  if(d.type==='KKPAS_SYNC_SUCCESS'){
+    showSyncBanner_(t('Pemeriksaan offline berjaya disegerakkan: ','Offline inspection synced: ')+(d.station||''),5000);
+    refreshNotificationCentre_(false);
+  } else if(d.type==='KKPAS_SYNC_ERROR'){
+    showSyncBanner_(t(`Sync offline gagal (${d.attempts || 0}/5). Cubaan seterusnya dijadualkan.`,`Offline sync failed (${d.attempts || 0}/5). The next retry is scheduled.`),5000);
+  } else if(d.type==='KKPAS_SYNC_DEAD_LETTER'){
+    showSyncBanner_(t(`Sync ${d.station || ''} dihentikan selepas ${d.attempts || 5} cubaan. Semakan manual diperlukan.`,`Sync for ${d.station || ''} stopped after ${d.attempts || 5} attempts. Manual review is required.`),9000);
+  }
+});
 </script>
 
 
