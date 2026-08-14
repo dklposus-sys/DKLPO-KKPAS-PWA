@@ -617,7 +617,8 @@ z-index: 997;
 
 .autosave-indicator.show { display: flex; }
 .autosave-indicator.saving { color: var(--brand); }
-.autosave-indicator.saved { color: var(--good); }
+.autosave-indicator.saved { color: var(--brand); }
+.autosave-indicator.error { color: var(--bad); }
 
 /* Draft restore modal */
 .draft-modal {
@@ -1547,8 +1548,50 @@ function stopAutoSave() {
   }
 }
 
+// Auto-save status UI helper. Kept defensive so draft saving never fails
+// only because the visual indicator is missing from a page/state.
+function showAutoSaveIndicator(state = 'saving') {
+  const el = document.getElementById('autoSaveIndicator');
+  const icon = document.getElementById('autoSaveIcon');
+  const text = document.getElementById('autoSaveText');
+  if (!el) return;
+
+  if (showAutoSaveIndicator._hideTimer) {
+    clearTimeout(showAutoSaveIndicator._hideTimer);
+    showAutoSaveIndicator._hideTimer = null;
+  }
+
+  el.classList.remove('saving', 'saved', 'error');
+  el.classList.add('show');
+
+  if (state === 'saved') {
+    el.classList.add('saved');
+    if (icon) icon.textContent = '✓';
+    if (text) text.textContent = t('Disimpan', 'Saved');
+    showAutoSaveIndicator._hideTimer = setTimeout(() => {
+      el.classList.remove('show', 'saved');
+    }, 1800);
+    return;
+  }
+
+  if (state === 'error') {
+    el.classList.add('error');
+    if (icon) icon.textContent = '⚠';
+    if (text) text.textContent = t('Gagal simpan', 'Save failed');
+    showAutoSaveIndicator._hideTimer = setTimeout(() => {
+      el.classList.remove('show', 'error');
+    }, 3500);
+    return;
+  }
+
+  el.classList.add('saving');
+  if (icon) icon.textContent = '💾';
+  if (text) text.textContent = t('Menyimpan...', 'Saving...');
+}
+
 async function saveDraft() {
   if (!currentStation || hasSubmittedCurrent) return;
+  showAutoSaveIndicator('saving');
   try {
     const draft = {
       id: KKPAS_DRAFT_KEY,
@@ -1569,6 +1612,7 @@ async function saveDraft() {
     showAutoSaveIndicator('saved');
   } catch (e) {
     console.error('Draft save failed:', e);
+    showAutoSaveIndicator('error');
     showToast(t('Draf gagal disimpan pada peranti.', 'Draft could not be saved on this device.'), 'warning');
   }
 }
