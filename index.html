@@ -938,7 +938,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 <div class="card-mobile photo-section">
 <label style="display:block;margin-bottom:12px;">
 <span data-ms="Gambar Bukti" data-en="Evidence Photos">Gambar Bukti</span>
-<span style="color:var(--text-secondary);font-size:12px;"> (Max 12 <span data-ms="gambar" data-en="photos">gambar</span>, <250KB <span data-ms="setiap satu" data-en="each">setiap satu</span>)</span>
+<span style="color:var(--text-secondary);font-size:12px;"> (Max 12 <span data-ms="gambar" data-en="photos">gambar</span>, <120KB <span data-ms="setiap satu" data-en="each">setiap satu</span>)</span>
 </label>
 
 <div class="review-system-note">
@@ -968,7 +968,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 </div>
 
 <div class="compression-indicator">
-✓ <span data-ms="Gambar akan dimampatkan automatik ke bawah 250KB" data-en="Images will be auto-compressed to under 250KB">Gambar akan dimampatkan automatik ke bawah 250KB</span>
+✓ <span data-ms="Gambar akan dimampatkan automatik ke bawah 120KB (sesuai untuk Web, PDF & Cetakan)" data-en="Images will be auto-compressed to under 120KB (optimal for Web, PDF & Print)">Gambar akan dimampatkan automatik ke bawah 120KB (sesuai untuk Web, PDF &amp; Cetakan)</span>
 </div>
 </div>
 
@@ -1025,7 +1025,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 // ============================================
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby8zCc5JTD6pQkDAEOWbGLsCpMkiGnDFhyh82DZ7qn7-R-SyaJppKBslB94oZhcOUBr/exec";
 const PHOTO_REVIEW_ACTION = "reviewPhoto";
-const MAX_PHOTO_KB = 250;
+const MAX_PHOTO_KB = 120;
 const MAX_PHOTOS = 12;
 const KKPAS_DB_NAME = 'kkpas-offline-v1';
 const KKPAS_DB_VERSION = 3;
@@ -1476,68 +1476,39 @@ function newSubmissionId_() {
 async function queueInspectionOffline_(basePayload) {
   const queueId = String(basePayload.clientSubmissionId || currentSubmissionId || newSubmissionId_());
   basePayload.clientSubmissionId = queueId;
+  const preUploaded = Array.isArray(basePayload.uploadedPhotoUrls) ? basePayload.uploadedPhotoUrls : [];
+  delete basePayload.uploadedPhotoUrls;
+
   const record = {
     id: queueId,
     createdAt: new Date().toISOString(),
     stationKey: `${session.month}-${currentTeam.code}-${currentStation}`,
+    webAppUrl: WEB_APP_URL,
     payload: basePayload,
     photos: photos.map((p, idx) => ({
       id:p.id, data:p.data, comment:p.comment||'', size:p.size||0, source:p.source||'', filename:p.filename||`photo_${idx+1}.jpg`,
       reviewAnalysis:p.reviewAnalysis||null, reviewAccepted:p.reviewAccepted||null, reviewedAt:p.reviewedAt||''
     })),
-    uploadedPhotoUrls: [],
+    uploadedPhotoUrls: preUploaded,
     status: 'QUEUED',
     attempts: 0,
     nextAttemptAt: '',
     lastError: ''
   };
   await idbPut_('offlineQueue', record);
+  await idbPut_('kv', { key: 'webAppUrl', value: WEB_APP_URL }).catch(() => {});
   await clearDraft();
   submittedStations.add(record.stationKey);
   localStorage.setItem('dklpo_submitted_stations', JSON.stringify([...submittedStations]));
   hasSubmittedCurrent = true;
   await registerOfflineSync_();
+  refreshNotificationCentre_(false);
   showSyncBanner_(t('Pemeriksaan disimpan offline dan akan dihantar apabila internet kembali.', 'Inspection saved offline and will sync when internet returns.'), 6000);
   return record;
 }
 
-async function getOfflineQueueCount_() {
-  try { return (await idbGetAll_('offlineQueue')).length; } catch (_) { return 0; }
-}
-
-function isLikelyNetworkError_(err) {
-  const msg=String(err&&err.message?err.message:err||'');
-  return !navigator.onLine || /Failed to fetch|NetworkError|Load failed|AbortError|CORS|timeout|timed out/i.test(msg);
-}
-
-function buildInspectionPayload_() {
-  const payload = {
-    action: 'submitInspection',
-    month: session.month,
-    station: currentStation,
-    inspectorName: session.inspectorName,
-    teamCode: currentTeam.code,
-    rating: currentRating,
-    comment: document.getElementById('inspectComment').value,
-    checklist: Object.entries(checklistData).map(([k, v]) => ({ item: k, status: v })),
-    overall: Object.values(checklistData).some(v => v === 'Tidak Memuaskan') ? 'NOT_OK' : 'OK',
-    lat: session.lat,
-    lng: session.lng,
-    gpsAccuracy: session.accuracy,
-    gpsCapturedAt: session.gpsCapturedAt || new Date().toISOString(),
-    gpsSampleCount: session.gpsSampleCount || 0,
-    gpsSpreadM: session.gpsSpreadM || 0,
-    clientSubmissionId: currentSubmissionId || (currentSubmissionId = newSubmissionId_()),
-    photoCount: photos.length,
-    timestamp: new Date().toISOString(),
-    inspectionLang: inspectionLang,
-    aiInsight: aiInsightText || ''
-  };
-  payload.findings = JSON.stringify(Object.values(findingsDraft || {}));
-  return payload;
-}
-
 function startAutoSave() {
+  stopAutoSave();
   autoSaveInterval = setInterval(() => saveDraft(), 60000);
 }
 
@@ -1846,8 +1817,10 @@ const btn = document.getElementById('btnLogin');
 completeLogin();
 }
 
-function completeLogin() {
+async function completeLogin() {
   localStorage.setItem('dklpo_mobile_session', JSON.stringify(session));
+  await idbPut_('kv', { key: 'session', value: session }).catch(() => {});
+  await idbPut_('kv', { key: 'webAppUrl', value: WEB_APP_URL }).catch(() => {});
   showToast(t('Log masuk berjaya', 'Login successful'), 'success');
   showInspectionPage();
 }
@@ -1856,6 +1829,7 @@ async function doLogout(options = {}) {
   const ask = options.confirm !== false;
   if (!ask || confirm(t('Pasti untuk keluar?', 'Confirm logout?'))) {
     await clearDraft();
+    await idbDelete_('kv', 'session').catch(() => {});
     localStorage.removeItem('dklpo_mobile_session');
     session = null;
     currentTeam = null;
@@ -2488,20 +2462,24 @@ function updatePhotoSummary() {
   const totalSize=photos.reduce((sum,p)=>sum+(p.size||0),0); document.getElementById('photoCount').textContent=`${photos.length} ${t('gambar','photos')}`; document.getElementById('photoTotalSize').textContent=`${t('Jumlah','Total')}: ${formatFileSize(totalSize)}`;
 }
 
-async function compressImageAggressive(file, maxSizeKB = 250) {
+async function compressImageAggressive(file, maxSizeKB = 120) {
   const MAX_SIZE = maxSizeKB * 1024;
-  const MAX_WIDTH = 1600;
-  const MAX_HEIGHT = 1600;
+  // 1280px adalah saiz optimum untuk paparan Web, jadual laporan PDF dan cetakan kertas A4 (~150-200 DPI)
+  const MAX_WIDTH = 1280;
+  const MAX_HEIGHT = 1280;
   const MIN_WIDTH = 320;
   const MIN_HEIGHT = 320;
-  const QUALITY_STEPS = [0.92, 0.86, 0.8, 0.74, 0.68, 0.62, 0.56, 0.5, 0.44, 0.38, 0.32, 0.28, 0.24];
+  const QUALITY_STEPS = [0.84, 0.78, 0.72, 0.66, 0.60, 0.54, 0.48, 0.42, 0.36, 0.30, 0.25];
 
-  const source = await readFileAsDataUrl(file);
-  const img = await loadImageElement(source);
+  let source = await readFileAsDataUrl(file);
+  let img = await loadImageElement(source);
 
   let width = img.naturalWidth || img.width || 0;
   let height = img.naturalHeight || img.height || 0;
   if (!width || !height) {
+    img.src = '';
+    img = null;
+    source = null;
     throw new Error(t('Dimensi gambar tidak dapat dibaca.', 'Unable to read image dimensions.'));
   }
 
@@ -2513,66 +2491,49 @@ async function compressImageAggressive(file, maxSizeKB = 250) {
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d', { alpha: false });
-  if (!ctx) throw new Error(t('Canvas tidak tersedia.', 'Canvas is not available.'));
+  if (!ctx) {
+    img.src = '';
+    img = null;
+    source = null;
+    throw new Error(t('Canvas tidak tersedia.', 'Canvas is not available.'));
+  }
 
-  let attempts = 0;
-  while (attempts < 14) {
-    attempts++;
-    canvas.width = Math.max(MIN_WIDTH, Math.round(width));
-    canvas.height = Math.max(MIN_HEIGHT, Math.round(height));
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  try {
+    let attempts = 0;
+    while (attempts < 12) {
+      attempts++;
+      canvas.width = Math.max(MIN_WIDTH, Math.round(width));
+      canvas.height = Math.max(MIN_HEIGHT, Math.round(height));
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    for (const quality of QUALITY_STEPS) {
-      const result = canvas.toDataURL('image/jpeg', quality);
-      const size = estimateBase64Size(result);
-      if (size <= MAX_SIZE) return result;
+      for (const quality of QUALITY_STEPS) {
+        const result = canvas.toDataURL('image/jpeg', quality);
+        const size = estimateBase64Size(result);
+        if (size <= MAX_SIZE) return result;
+      }
+
+      if (canvas.width <= MIN_WIDTH && canvas.height <= MIN_HEIGHT) {
+        break;
+      }
+
+      width = Math.max(MIN_WIDTH, Math.round(canvas.width * 0.85));
+      height = Math.max(MIN_HEIGHT, Math.round(canvas.height * 0.85));
+      await new Promise(r => setTimeout(r, 0));
     }
-
-    if (canvas.width <= MIN_WIDTH && canvas.height <= MIN_HEIGHT) {
-      break;
+  } finally {
+    // Pembersihan memori (Garbage Collection) supaya telefon tidak berat/crash
+    canvas.width = 0;
+    canvas.height = 0;
+    if (img) {
+      img.src = '';
+      img = null;
     }
-
-    width = Math.max(MIN_WIDTH, Math.round(canvas.width * 0.85));
-    height = Math.max(MIN_HEIGHT, Math.round(canvas.height * 0.85));
-    await new Promise(r => setTimeout(r, 0));
+    source = null;
   }
 
   throw new Error(t(`Tidak dapat mampatkan gambar ke ${maxSizeKB}KB atau kurang`, `Unable to compress image to ${maxSizeKB}KB or smaller`));
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error(t('Gagal membaca fail gambar', 'Failed to read image file')));
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImageElement(dataUrl) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(t('Format gambar tidak disokong', 'Unsupported image format')));
-    img.src = dataUrl;
-  });
-}
-
-function normalizeDataUrl(dataUrl) {
-  return String(dataUrl || '').replace(/\s+/g, '');
-}
-
-function estimateBase64Size(base64String) {
-  const base64Length = base64String.split(',')[1]?.length || 0;
-  return (base64Length * 3) / 4;
-}
-
-function formatFileSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 // ============================================
@@ -2622,14 +2583,14 @@ isSubmitting = true;
 
 let payload = null;
   let uploadsCompleted = false;
+  const photoUrls = [];
   try {
     // Refresh GPS at submission time (mandatory)
     const gpsNow = await requireGps_('submit');
     if (!gpsNow.ok) throw new Error('GPS_REQUIRED');
 
-payload = buildInspectionPayload_();
+    payload = buildInspectionPayload_();
 
-const photoUrls = [];
     if (photos.length > 0) {
       showToast(t('Menghantar gambar...', 'Uploading photos...'), 'success');
       for (let i = 0; i < photos.length; i++) {
@@ -2655,20 +2616,17 @@ const photoUrls = [];
       throw new Error(t('Upload gambar tidak lengkap. Sila cuba lagi.', 'Photo upload incomplete. Please try again.'));
     }
 
-payload.photos = photoUrls;
+    payload.photos = photoUrls;
     uploadsCompleted = true;
     const result = await submitWithRetry(payload);
 
-if (result.ok) {
+    if (result.ok) {
       submittedStations.add(stationKey);
       localStorage.setItem('dklpo_submitted_stations', JSON.stringify([...submittedStations]));
       clearDraft();
       sessionStorage.setItem('dklpo_just_submitted', 'true');
-
-// Show success modal instead of toast
       showSubmitSuccessModal(result);
-
-} else {
+    } else {
       throw new Error(result.error || 'Unknown error');
     }
   } catch (err) {
@@ -2679,15 +2637,20 @@ if (result.ok) {
     } else if (isLikelyNetworkError_(err)) {
       try {
         const offlinePayload = payload || buildInspectionPayload_();
+        if (photoUrls.length > 0) {
+          offlinePayload.uploadedPhotoUrls = photoUrls;
+        }
         await queueInspectionOffline_(offlinePayload);
         showOfflineQueuedSuccessModal_();
       } catch (queueErr) {
         showToast(t('Gagal menyimpan offline: ' + queueErr.message, 'Failed to save offline: ' + queueErr.message), 'error');
       }
     } else {
-      showToast(t('Gagal: ' + err.message, 'Failed: ' + err.message), 'error');
-    }
-  } finally {
+        showToast(t('Gagal: ' + err.message, 'Failed: ' + err.message), 'error');
+      }
+    } finally {  
+      isSubmitting = false;
+      btn.classList.remove('loading');
     isSubmitting = false;
     btn.classList.remove('loading');
     if (!hasSubmittedCurrent) {
@@ -2874,18 +2837,28 @@ function renderNotificationCentre_(data){
 async function appendOfflineQueueStatusToNotificationCentre_(){
   const body=document.getElementById('notificationCentreBody'); if(!body)return;
   let rows=[]; try{rows=await idbGetAll_('offlineQueue');}catch(_){return;}
+  const badge=document.getElementById('notificationBadge');
   if(!rows.length)return;
   const queued=rows.filter(r=>r.status!=='DEAD_LETTER');
   const dead=rows.filter(r=>r.status==='DEAD_LETTER');
+  if(badge && rows.length > 0){
+    const currentCount = Number(badge.textContent || 0);
+    badge.textContent = String(currentCount + rows.length);
+    badge.classList.add('show');
+  }
   const items=rows.map(r=>{
     const station=escapeHtml(r.payload&&r.payload.station||'-');
-    const status=r.status==='DEAD_LETTER'?t('PERLU TINDAKAN','ACTION REQUIRED'):t('Menunggu Sync','Waiting for Sync');
+    const totalPh = Array.isArray(r.photos) ? r.photos.length : 0;
+    const donePh = Array.isArray(r.uploadedPhotoUrls) ? r.uploadedPhotoUrls.length : 0;
+    const photoProgress = totalPh > 0 ? ` (${donePh}/${totalPh} ${t('gambar','photos')})` : '';
+    const status=r.status==='DEAD_LETTER'?t('PERLU TINDAKAN','ACTION REQUIRED'):(r.status==='SYNCING'?t('Sedang Menghantar...','Syncing...'):t('Menunggu Sync','Waiting for Sync'));
     const detail=r.status==='DEAD_LETTER'
       ? `<div style="color:var(--bad);font-size:12px;margin-top:5px;">${escapeHtml(r.lastError||'Sync failed')}</div><button class="btn-secondary" style="margin-top:8px;padding:9px 12px;" onclick="retryOfflineQueueItem_('${escapeHtml(r.id)}')">↻ ${t('Cuba Semula','Retry')}</button>`
-      : `<div style="font-size:12px;color:var(--text-secondary);margin-top:5px;">${t('Percubaan','Attempts')}: ${Number(r.attempts||0)}/5${r.nextAttemptAt?` · ${escapeHtml(r.nextAttemptAt)}`:''}</div>`;
+      : `<div style="font-size:12px;color:var(--text-secondary);margin-top:5px;">${t('Percubaan','Attempts')}: ${Number(r.attempts||0)}/5${photoProgress}${r.nextAttemptAt?` · ${escapeHtml(r.nextAttemptAt)}`:''}</div>`;
     return `<div class="notification-team"><b>${station} — ${status}</b>${detail}</div>`;
   }).join('');
-  body.insertAdjacentHTML('afterbegin',`<div class="notification-item"><div class="date">${t('Offline Sync Queue','Offline Sync Queue')}</div><b>${queued.length} ${t('menunggu','waiting')} · ${dead.length} ${t('perlu tindakan','need action')}</b>${items}</div>`);
+  const syncNowBtn = queued.length > 0 ? `<button class="btn-secondary" style="margin-top:10px;padding:10px 14px;" onclick="registerOfflineSync_()">🔄 ${t('Sync Sekarang','Sync Now')}</button>` : '';
+  body.insertAdjacentHTML('afterbegin',`<div class="notification-item"><div class="date">${t('Buku Log Offline Sync','Offline Sync Log')}</div><b>${queued.length} ${t('menunggu','waiting')} · ${dead.length} ${t('perlu tindakan','need action')}</b>${items}${syncNowBtn}</div>`);
 }
 
 async function retryOfflineQueueItem_(id){
