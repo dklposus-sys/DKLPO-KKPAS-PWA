@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="ms"><head>
 <meta charset="utf-8">
+<meta name="dklpo-release" content="PEMERIKSA-FASA10-20261028">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0b1220">
 <title>KKPAS Monthly Inspection - Desa Kim Loong Palm Oil Sdn Bhd</title>
@@ -874,7 +875,6 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 <label data-ms="Bulan" data-en="Month">Bulan</label>
 <select class="form-control" id="loginMonth"></select>
 </div>
-
 <button class="btn-submit" onclick="doLogin()" id="btnLogin">
 🔐 <span data-ms="Log Masuk" data-en="Login">Log Masuk</span>
 </button>
@@ -975,7 +975,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 <!-- Comment -->
 <div class="card-mobile">
 <label data-ms="Komen Keseluruhan" data-en="General Comment">Komen Keseluruhan</label>
-<textarea class="form-control" id="inspectComment" rows="3" placeholder="Komen keseluruhan... / General comments..." oninput="saveDraft()"></textarea>
+<textarea class="form-control" id="inspectComment" rows="3" placeholder="Komen keseluruhan... / General comments..." oninput="scheduleDraftSave_()"></textarea>
 </div>
 
 <!-- AI Insight -->
@@ -1023,7 +1023,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 // ============================================
 // CONFIGURATION
 // ============================================
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby8zCc5JTD6pQkDAEOWbGLsCpMkiGnDFhyh82DZ7qn7-R-SyaJppKBslB94oZhcOUBr/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwHTRO_asLzBFhKwnolGE5egZ0zD3bHust69dROJMLJrwZw-gHNhNQm8u3IK_CbL5bj/exec";
 const PHOTO_REVIEW_ACTION = "reviewPhoto";
 const MAX_PHOTO_KB = 250;
 const MAX_PHOTOS = 12;
@@ -1068,7 +1068,12 @@ async function collectGpsSamples_() {
     try {
       const pos = await getCurrentPositionAsync({ enableHighAccuracy: true, timeout: 9000, maximumAge: 0 });
       const c = pos && pos.coords;
-      if (c && isFinite(c.latitude) && isFinite(c.longitude)) {
+      const fixTimestamp = Number(pos && pos.timestamp || 0);
+      const nowMs = Date.now();
+      // Ignore stale device fixes; 60s threshold does not require false GPS precision.
+      if (fixTimestamp && Math.abs(nowMs - fixTimestamp) > 60000) continue;
+      if (c && isFinite(c.latitude) && isFinite(c.longitude) &&
+          Math.abs(Number(c.latitude)) <= 90 && Math.abs(Number(c.longitude)) <= 180) {
         samples.push({
           lat: Number(c.latitude),
           lng: Number(c.longitude),
@@ -1275,13 +1280,14 @@ const ZONE_MAP_MAX_SCALE = 4;
 // ============================================
 function setLanguage(lang) {
   currentLang = lang;
+  if (!currentStation) inspectionLang = lang; // Kekalkan bahasa checklist selepas pemeriksaan bermula.
   document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
   document.getElementById(`btn-${lang}`).classList.add('active');
   document.querySelectorAll(`[data-${lang}]`).forEach(el => {
     el.textContent = el.getAttribute(`data-${lang}`);
   });
   localStorage.setItem('dklpo_lang', lang);
-  if (currentStation) loadStation(currentStation);
+  // Kekalkan borang semasa: loadStation() memadam gambar, checklist dan submission ID.
 }
 
 function t(ms, en) {
@@ -1473,21 +1479,41 @@ function newSubmissionId_() {
   return 'SUB-' + Date.now() + '-' + Math.random().toString(36).slice(2,12);
 }
 
+async function buildUploadedPhotoMapForQueue_(previous, submissionId) {
+  const map = {...(previous && previous.uploadedPhotoMap || {})};
+  const legacy = Array.isArray(previous && previous.uploadedPhotoUrls) ? previous.uploadedPhotoUrls : [];
+  for (let i=0; i<photos.length; i++) {
+    const key = photoUploadKey_(submissionId, photos[i], i+1);
+    if (map[key] && map[key].url) continue;
+    const old = legacy[i];
+    // Legacy indexed receipts only apply when photo index is unchanged in a previous queue.
+    if (old && old.url && previous && previous.photos && previous.photos[i] &&
+        String(previous.photos[i].id) === String(photos[i].id)) map[key] = old;
+    else {
+      const saved = await getSavedPhotoReceipt_(submissionId, photos[i], i+1);
+      if (saved) map[key] = saved;
+    }
+  }
+  return map;
+}
+
 async function queueInspectionOffline_(basePayload) {
   const queueId = String(basePayload.clientSubmissionId || currentSubmissionId || newSubmissionId_());
   basePayload.clientSubmissionId = queueId;
+  const previous = await idbGet_('offlineQueue', queueId).catch(() => null);
   const record = {
     id: queueId,
-    createdAt: new Date().toISOString(),
-    stationKey: `${session.month}-${currentTeam.code}-${currentStation}`,
+    createdAt: previous && previous.createdAt || new Date().toISOString(),
+    stationKey: `${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${currentStation}`,
     payload: basePayload,
     photos: photos.map((p, idx) => ({
       id:p.id, data:p.data, comment:p.comment||'', size:p.size||0, source:p.source||'', filename:p.filename||`photo_${idx+1}.jpg`,
       reviewAnalysis:p.reviewAnalysis||null, reviewAccepted:p.reviewAccepted||null, reviewedAt:p.reviewedAt||''
     })),
-    uploadedPhotoUrls: [],
+    uploadedPhotoUrls: Array.isArray(previous && previous.uploadedPhotoUrls) ? previous.uploadedPhotoUrls : [],
+    uploadedPhotoMap: await buildUploadedPhotoMapForQueue_(previous, queueId),
     status: 'QUEUED',
-    attempts: 0,
+    attempts: Number(previous && previous.attempts || 0),
     nextAttemptAt: '',
     lastError: ''
   };
@@ -1507,7 +1533,7 @@ async function getOfflineQueueCount_() {
 
 function isLikelyNetworkError_(err) {
   const msg=String(err&&err.message?err.message:err||'');
-  return !navigator.onLine || /Failed to fetch|NetworkError|Load failed|AbortError|CORS|timeout|timed out/i.test(msg);
+  return !navigator.onLine || /Failed to fetch|NetworkError|Load failed|AbortError|CORS|timeout|timed out|Tidak dapat berhubung dengan Apps Script|Unable to reach the Apps Script/i.test(msg);
 }
 
 function buildInspectionPayload_() {
@@ -1517,6 +1543,7 @@ function buildInspectionPayload_() {
     station: currentStation,
     inspectorName: session.inspectorName,
     teamCode: currentTeam.code,
+    year: session.year || new Date().getFullYear(),
     rating: currentRating,
     comment: document.getElementById('inspectComment').value,
     checklist: Object.entries(checklistData).map(([k, v]) => ({ item: k, status: v })),
@@ -1535,6 +1562,12 @@ function buildInspectionPayload_() {
   };
   payload.findings = JSON.stringify(Object.values(findingsDraft || {}));
   return payload;
+}
+
+let pendingDraftTimer_ = null;
+function scheduleDraftSave_() {
+  if (pendingDraftTimer_) clearTimeout(pendingDraftTimer_);
+  pendingDraftTimer_ = setTimeout(() => { pendingDraftTimer_=null; saveDraft(); }, 650);
 }
 
 function startAutoSave() {
@@ -1589,6 +1622,7 @@ function showAutoSaveIndicator(state = 'saving') {
   if (text) text.textContent = t('Menyimpan...', 'Saving...');
 }
 
+let kkpasDraftWriteChain_ = Promise.resolve();
 async function saveDraft() {
   if (!currentStation || hasSubmittedCurrent) return;
   showAutoSaveIndicator('saving');
@@ -1596,35 +1630,37 @@ async function saveDraft() {
     const draft = {
       id: KKPAS_DRAFT_KEY,
       station: currentStation,
-      checklist: checklistData,
-      findings: findingsDraft,
+      checklist: {...checklistData},
+      findings: JSON.parse(JSON.stringify(findingsDraft || {})),
       photos: photos.map(p => ({ ...p })),
       rating: currentRating,
       comment: document.getElementById('inspectComment').value,
       aiInsight: aiInsightText || '',
-      submissionId: currentSubmissionId || '',
+      submissionId: currentSubmissionId || (currentSubmissionId = newSubmissionId_()),
       timestamp: Date.now(),
       session: session,
       inspectionLang: inspectionLang
     };
-    await idbPut_('drafts', draft);
+    kkpasDraftWriteChain_ = kkpasDraftWriteChain_.catch(()=>{}).then(()=>idbPut_('drafts', draft));
+    await kkpasDraftWriteChain_;
     try { sessionStorage.setItem('dklpo_draft_exists', String(draft.timestamp)); } catch (_) {}
     showAutoSaveIndicator('saved');
+    return true;
   } catch (e) {
     console.error('Draft save failed:', e);
     showAutoSaveIndicator('error');
     showToast(t('Draf gagal disimpan pada peranti.', 'Draft could not be saved on this device.'), 'warning');
+    return false;
   }
 }
 
 async function checkForDraft() {
   try {
     const data = await idbGet_('drafts', KKPAS_DRAFT_KEY);
-    if (data && Date.now() - Number(data.timestamp || 0) < 24 * 60 * 60 * 1000) {
+    if (data) {
       document.getElementById('draftModal').classList.add('active');
       return true;
     }
-    if (data) await idbDelete_('drafts', KKPAS_DRAFT_KEY);
   } catch (e) { console.warn('Draft check failed:', e); }
   return false;
 }
@@ -1636,6 +1672,12 @@ async function restoreDraft() {
   if (draft.session && !session) session = draft.session;
   if (draft.inspectionLang) inspectionLang = draft.inspectionLang;
   currentTeam = session && session.team ? session.team : currentTeam;
+  if(!currentTeam || !session){showToast(t('Sila log masuk sebelum memulihkan draf.', 'Login before restoring the draft.'), 'error');return;}
+  if(draft.session && (draft.session.team?.code !== session.team?.code ||
+      draft.session.month !== session.month || Number(draft.session.year||0)!==Number(session.year||0))){
+    showToast(t('Draf milik pasukan/bulan/tahun lain.', 'Draft belongs to another team/month/year.'),'error');
+    return;
+  }
   document.getElementById('pageLogin').classList.remove('active');
   document.getElementById('pageInspection').classList.add('active');
   document.getElementById('btnLogout').style.display = 'block';
@@ -1679,6 +1721,7 @@ async function discardDraft() {
 }
 
 async function clearDraft() {
+  await kkpasDraftWriteChain_.catch(()=>{});
   await idbDelete_('drafts', KKPAS_DRAFT_KEY).catch(()=>{});
   try { sessionStorage.removeItem('dklpo_draft_exists'); } catch (_) {}
   stopAutoSave();
@@ -1827,6 +1870,7 @@ session = {
     team: currentTeam,
     inspectorName: inspectorName,
     month: month,
+    year: new Date().getFullYear(),
     loginTime: Date.now(),
     expiry: Date.now() + (30 * 24 * 60 * 60 * 1000)
   };
@@ -1846,16 +1890,20 @@ const btn = document.getElementById('btnLogin');
 completeLogin();
 }
 
-function completeLogin() {
+async function completeLogin() {
   localStorage.setItem('dklpo_mobile_session', JSON.stringify(session));
   showToast(t('Log masuk berjaya', 'Login successful'), 'success');
-  showInspectionPage();
+  const hasDraft = await checkForDraft();
+  if (!hasDraft) showInspectionPage();
 }
 
 async function doLogout(options = {}) {
   const ask = options.confirm !== false;
   if (!ask || confirm(t('Pasti untuk keluar?', 'Confirm logout?'))) {
-    await clearDraft();
+    // Preserve latest comments and image evidence when logging out.
+    if (pendingDraftTimer_) {clearTimeout(pendingDraftTimer_);pendingDraftTimer_=null;}
+    await saveDraft();
+    await kkpasDraftWriteChain_.catch(()=>{});
     localStorage.removeItem('dklpo_mobile_session');
     session = null;
     currentTeam = null;
@@ -1890,7 +1938,7 @@ if (assigned.length === 0) {
 const stationSelect = document.getElementById('stationSelect');
   stationSelect.innerHTML = `<option value="">-- ${t('Pilih Stesen', 'Select Station')} --</option>`;
 
-const availableStations = assigned.filter(st => !submittedStations.has(`${session.month}-${currentTeam.code}-${st}`));
+const availableStations = assigned.filter(st => !submittedStations.has(`${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${st}`));
 
 if (availableStations.length === 0) {
     showToast(t('Semua stesen telah diperiksa!', 'All stations completed!'), 'success');
@@ -1926,7 +1974,7 @@ function getAssignedStationsForTeam(team, month) {
 
 function loadStation(station) {
   // Check if station already submitted
-  const stationKey = `${session.month}-${currentTeam.code}-${station}`;
+  const stationKey = `${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${station}`;
   if (submittedStations.has(stationKey)) {
     showToast(t('Stesen ini telah diperiksa', 'This station has been inspected'), 'error');
     return;
@@ -1962,7 +2010,7 @@ const container = document.getElementById('checklistContainer');
         ${sec.items.map((item, i) => `
           <div class="check-option">
             <label>${item}</label>
-            <select class="status-select" onchange="updateChecklist('${sec.sec}', '${item}', this.value)">
+            <select class="status-select" data-item-key="${escapeHtml(sec.sec + '-' + item)}" onchange="updateChecklistByKey_(this.dataset.itemKey, this.value)">
               <option value="Memuaskan">✓ ${t('Memuaskan', 'Satisfactory')}</option>
               <option value="Tidak Memuaskan">✗ ${t('Tidak', 'No')}</option>
               <option value="Tidak Berkenaan">○ ${t('N/A', 'N/A')}</option>
@@ -2008,6 +2056,16 @@ if (Object.keys(checklistData).length > 0 || photos.length > 0) {
 
 function toggleChecklist(idx) {
   document.getElementById(`checkSec${idx}`).classList.toggle('open');
+}
+
+function updateChecklistByKey_(key, value) {
+  if (!key) return;
+  checklistData[key] = value;
+  if (value === 'Tidak Memuaskan') {
+    if (!findingsDraft[key]) findingsDraft[key] = { itemKey:key, type:'NCR', severity:'Medium', pic:'', action:'', rootCause:'', dueDate:'' };
+  } else { delete findingsDraft[key]; }
+  renderIssueSection();
+  scheduleDraftSave_();
 }
 
 function updateChecklist(section, item, value) {
@@ -2089,10 +2147,10 @@ wrap.style.display = 'block';
 
 ${keys.map((k, i) => {
       const f = findingsDraft[k];
-      const kEnc = encodeURIComponent(k);
+      const kEnc = encodeURIComponent(k).replace(/'/g, "%27");
       return `
         <div style="margin-top:12px;border:1px solid var(--stroke);border-radius:12px;overflow:hidden;">
-          <div style="padding:12px 14px;background:var(--surface-elevated);font-weight:700;">${i + 1}. ${k}</div>
+          <div style="padding:12px 14px;background:var(--surface-elevated);font-weight:700;">${i + 1}. ${escapeHtml(k)}</div>
           <div style="padding:12px 14px;display:grid;gap:10px;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div>
@@ -2115,22 +2173,22 @@ ${keys.map((k, i) => {
 
 <div>
               <label style="display:block;margin-bottom:6px;">PIC</label>
-              <input class="form-control" value="${f.pic || ''}" onchange="updateFindingField('${kEnc}','pic',this.value)" />
+              <input class="form-control" value="${escapeHtml(f.pic || '')}" onchange="updateFindingField('${kEnc}','pic',this.value)" />
             </div>
 
 <div>
               <label style="display:block;margin-bottom:6px;">${t('Tindakan Diperlukan','Action Required')}</label>
-              <textarea class="form-control" rows="2" onchange="updateFindingField('${kEnc}','action',this.value)">${f.action || ''}</textarea>
+              <textarea class="form-control" rows="2" onchange="updateFindingField('${kEnc}','action',this.value)">${escapeHtml(f.action || '')}</textarea>
             </div>
 
 <div>
               <label style="display:block;margin-bottom:6px;">${t('Punca Akar (optional)','Root cause (optional)')}</label>
-              <textarea class="form-control" rows="2" onchange="updateFindingField('${kEnc}','rootCause',this.value)">${f.rootCause || ''}</textarea>
+              <textarea class="form-control" rows="2" onchange="updateFindingField('${kEnc}','rootCause',this.value)">${escapeHtml(f.rootCause || '')}</textarea>
             </div>
 
 <div>
               <label style="display:block;margin-bottom:6px;">${t('Tarikh Tamat (optional)','Due date (optional)')}</label>
-              <input type="date" class="form-control" value="${f.dueDate || ''}" onchange="updateFindingField('${kEnc}','dueDate',this.value)" />
+              <input type="date" class="form-control" value="${escapeHtml(f.dueDate || '')}" onchange="updateFindingField('${kEnc}','dueDate',this.value)" />
             </div>
           </div>
         </div>
@@ -2150,34 +2208,22 @@ function updateFindingField(keyEncoded, field, value) {
 function showOfflineQueuedSuccessModal_() {
   document.getElementById('successTitle').innerHTML = '📥 <span>' + t('Disimpan Offline','Saved Offline') + '</span>';
   document.getElementById('successMsg').textContent = t('Pemeriksaan lengkap disimpan pada peranti. Ia akan dihantar automatik apabila internet tersedia.', 'The full inspection is stored on this device and will sync automatically when internet is available.');
+  document.getElementById('successNext').style.display = '';
   document.getElementById('successNext').innerHTML = '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:12px;color:var(--warn);font-size:13px;">' + t('Jangan padam data browser/app sebelum status sync berjaya.', 'Do not clear browser/app data before the sync succeeds.') + '</div>';
   document.getElementById('successModal').classList.add('active');
 }
 
 function showSubmitSuccessModal(result) {
-  document.getElementById('successMsg').textContent =
-    t('Terima kasih. Tekan OK untuk log keluar.', 'Thank you. Press OK to logout.');
-
-const next = document.getElementById('successNext');
-  const nt = result && result.nextTeam ? result.nextTeam : null;
-
-if (nt && nt.teamName) {
-    next.innerHTML = `
-      <div style="background:rgba(34,197,94,0.08);border:1px solid var(--stroke);border-radius:12px;padding:12px;">
-        <div style="font-weight:700;margin-bottom:6px;">🔔 ${t('Pemeriksa seterusnya','Next team')}</div>
-        <div style="color:var(--text-secondary);font-size:13px;">
-          <b>${nt.teamName}</b><br/>
-          ${nt.station ? (t('Stesen','Station') + ': <b>' + nt.station + '</b>') : ''}
-        </div>
-      </div>`;
-  } else {
-    next.innerHTML = `
-      <div style="color:var(--text-secondary);font-size:13px;margin-top:10px;">
-        ${t('Tiada pemeriksa seterusnya.','No next team.')}
-      </div>`;
-  }
-
-document.getElementById('successModal').classList.add('active');
+  const title = document.getElementById('successTitle');
+  const msg = document.getElementById('successMsg');
+  const extra = document.getElementById('successNext');
+  // Set correct title even after showing an offline queue confirmation.
+  title.textContent = '✅ ' + t('Laporan dihantar', 'Report submitted');
+  msg.textContent = t('Terima kasih. Tekan OK untuk log keluar.', 'Thank you. Press OK to logout.');
+  // Every team uses its own phone. Never display details of another team here.
+  extra.replaceChildren();
+  extra.style.display = 'none';
+  document.getElementById('successModal').classList.add('active');
 }
 
 function closeSuccessModal(shouldLogout) {
@@ -2277,7 +2323,7 @@ function updatePhotoComment(photoId, comment) {
   if (photo) {
     photo.comment = comment;
     if (photo.reviewAccepted) photo.reviewAccepted.comment = false;
-    saveDraft();
+    scheduleDraftSave_();
   }
 }
 
@@ -2322,13 +2368,9 @@ function findChecklistKeyForReview(ai) {
 
 function setChecklistUiValueByKey(key, value) {
   if (!key) return;
-  const list = getCurrentChecklistForReview();
-  let wanted = '';
-  for (const sec of list) for (const item of sec.items) if (`${sec.section}-${item}` === key) wanted = item;
-  if (!wanted) return;
-  document.querySelectorAll('.check-option').forEach(row => {
-    const label=row.querySelector('label'), select=row.querySelector('.status-select');
-    if (label && select && normalizeForMatch(label.textContent)===normalizeForMatch(wanted)) select.value=value;
+  // Match the exact item key; text-based matching could update the wrong row.
+  document.querySelectorAll('.status-select').forEach(select => {
+    if (select.dataset.itemKey === key) select.value = value;
   });
 }
 
@@ -2353,7 +2395,7 @@ function renderPhotoReview(photo) {
   const hazardHtml=hazards.length?`<ul class="review-hazard-list">${hazards.map(h=>`<li>${escapeHtml(h)}</li>`).join('')}</ul>`:`<span>${t('Tiada hazard yang dapat dikenal pasti dengan yakin daripada gambar ini.','No hazard could be identified confidently from this image.')}</span>`;
   const acceptedHtml=(accepted.all||accepted.comment||accepted.generalComment||accepted.checklist||accepted.finding||accepted.rating||accepted.insight)?`<div class="review-accepted">✓ ${t('Sebahagian atau semua cadangan telah digunakan oleh pemeriksa.','Some or all suggestions have been applied by the inspector.')}</div>`:'';
   return `<div class="review-result"><div class="review-result-head"><span class="review-title">${t('Hasil Semakan','Review Result')}</span><span class="review-badge review-confidence">${conf}%</span></div><div class="review-result-body">
-    ${q.status==='RETAKE'?`<div class="review-warning">📷 ${escapeHtml(q.message||t('Gambar kurang sesuai untuk penilaian. Ambil semula gambar.','Image is not suitable for reliable assessment. Retake the image.'))}</div>`:''}
+    ${(q.status!=='OK' || review.evidenceSufficient !== true)?`<div class="review-warning">📷 ${escapeHtml(q.message||t('Cadangan tidak boleh digunakan. Periksa secara manual atau ambil gambar semula.','Suggestions cannot be applied. Inspect manually or retake the image.'))}</div>`:''}
     ${mismatch?`<div class="review-warning">⚠️ ${escapeHtml(mismatch)}</div>`:''}${acceptedHtml}
     <div class="review-row"><strong>${t('Pemerhatian','Observation')}</strong>${escapeHtml(review.observation||'-')}</div>
     <div class="review-row"><strong>${t('Hazard Kelihatan','Visible Hazards')}</strong>${hazardHtml}</div>
@@ -2375,13 +2417,14 @@ async function reviewPhoto(photoId) {
   if (!photo||!photo.data) return showToast(t('Gambar tidak ditemui.','Image not found.'),'error');
   photo.reviewState='loading'; photo.reviewError=''; renderPhotoList();
   try {
-    const result=await postToWebApp({action:PHOTO_REVIEW_ACTION,station:currentStation,inspectionLang,imageData:normalizeDataUrl(photo.data),checklist:JSON.stringify(getCurrentChecklistForReview()),existingChecklist:JSON.stringify(checklistData||{})},{timeoutMs:45000,retries:1});
+    const result=await postToWebApp({action:PHOTO_REVIEW_ACTION,teamCode:currentTeam.code,month:session.month,station:currentStation,inspectionLang,imageData:normalizeDataUrl(photo.data),checklist:JSON.stringify(getCurrentChecklistForReview()),existingChecklist:JSON.stringify(checklistData||{})},{timeoutMs:45000,retries:1});
     if (!result||!result.ok) throw new Error((result&&result.error)||t('Semakan gambar tidak memberi respons yang sah.','The image review did not return a valid response.'));
     const analysis=result.analysis;
     if (!analysis||typeof analysis!=='object') throw new Error(t('Format hasil semakan tidak sah.','Invalid review result format.'));
     photo.reviewAnalysis=analysis; photo.reviewState='done'; photo.reviewAccepted={comment:false,checklist:false,finding:false,all:false}; photo.reviewedAt=result.timestamp||new Date().toISOString();
     saveDraft(); renderPhotoList();
-    showToast(analysis.imageQuality&&analysis.imageQuality.status==='RETAKE'?t('Gambar perlu diambil semula untuk semakan yang lebih jelas.','Retake the image for a clearer review.'):t('Semakan gambar selesai. Sila semak cadangan sebelum menggunakannya.','Image review complete. Check the suggestions before applying them.'),analysis.imageQuality&&analysis.imageQuality.status==='RETAKE'?'warning':'success');
+    const safeToApply = analysis.imageQuality && analysis.imageQuality.status === 'OK' && analysis.evidenceSufficient === true;
+    showToast(safeToApply ? t('Semakan gambar selesai. Sila sahkan cadangan AI.', 'Photo review complete. Verify AI suggestions.') : t('Gambar atau bukti tidak mencukupi. AI tidak akan mengubah checklist secara automatik.', 'Image quality or evidence insufficient. AI will not automatically change the checklist.'), safeToApply ? 'success' : 'warning');
   } catch(err) {
     console.error('Photo review error:',err);
     photo.reviewState='error';
@@ -2391,8 +2434,23 @@ async function reviewPhoto(photoId) {
   }
 }
 
+function allowApplyAiSuggestion_(photo, feature) {
+  const review = photo && photo.reviewAnalysis;
+  if (!review) return false;
+  const quality = String(review.imageQuality && review.imageQuality.status || 'UNCERTAIN');
+  if (quality !== 'OK' || review.evidenceSufficient !== true) {
+    showToast(t(
+      'Cadangan AI tidak boleh digunakan: gambar kabur/tidak pasti atau bukti tidak mencukupi. Ambil gambar lebih jelas atau buat penilaian manual.',
+      'AI suggestion blocked: image quality uncertain or insufficient evidence. Retake the image or assess manually.'
+    ), 'warning');
+    return false;
+  }
+  return true;
+}
+
 function useReviewComment(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return;
+  if (!allowApplyAiSuggestion_(photo, 'useReviewComment')) return false;
   photo.comment=String(photo.reviewAnalysis.suggestedComment||photo.reviewAnalysis.observation||'').trim();
   photo.reviewAccepted=photo.reviewAccepted||{}; photo.reviewAccepted.comment=true;
   saveDraft(); renderPhotoList(); showToast(t('Komen dimasukkan. Anda masih boleh edit.','Comment inserted. You can still edit it.'),'success');
@@ -2401,6 +2459,7 @@ function useReviewComment(photoId) {
 
 function applyReviewGeneralComment(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewGeneralComment')) return false;
   const review=photo.reviewAnalysis;
   const text=String(review.suggestedComment||review.observation||'').trim();
   if(!text)return false;
@@ -2413,6 +2472,7 @@ function applyReviewGeneralComment(photoId) {
 
 function applyReviewRating(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewRating')) return false;
   const rating=Number(photo.reviewAnalysis.suggestedRating||0);
   if(rating<1||rating>5){showToast(t('AI tidak mempunyai bukti mencukupi untuk mencadangkan rating.','AI does not have enough evidence to suggest a rating.'),'warning');return false;}
   const ok=setRatingByValue_(rating);
@@ -2424,6 +2484,7 @@ function applyReviewRating(photoId) {
 
 function applyReviewInsight(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewInsight')) return false;
   const insight=String(photo.reviewAnalysis.aiInsight||'').trim();
   if(!insight)return false;
   if(!aiInsightText.includes(insight)) aiInsightText = aiInsightText ? (aiInsightText + '\n\n' + insight) : insight;
@@ -2436,6 +2497,7 @@ function applyReviewInsight(photoId) {
 
 function applyReviewChecklist(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewChecklist')) return false;
   const review=photo.reviewAnalysis, status=review.suggestedStatus;
   if(!['Memuaskan','Tidak Memuaskan'].includes(status)){showToast(t('Keputusan memerlukan semakan manusia dan status checklist tidak diubah.','Human review is required and the checklist status was not changed.'),'warning');return false;}
   const key=findChecklistKeyForReview(review); if(!key){showToast(t('Item cadangan tidak dapat dipadankan dengan checklist sistem.','The suggested item could not be matched to the system checklist.'),'warning');return false;}
@@ -2455,6 +2517,7 @@ function applyReviewChecklist(photoId) {
 
 function applyReviewFinding(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewFinding')) return false;
   const review=photo.reviewAnalysis,key=findChecklistKeyForReview(review); if(!key){showToast(t('Item cadangan tidak dapat dipadankan.','The suggested item could not be matched.'),'warning');return false;}
   if(review.suggestedStatus!=='Tidak Memuaskan'){showToast(t('NCR/CAP/PAR hanya boleh diisi apabila status yang dicadangkan ialah Tidak Memuaskan.','NCR/CAP/PAR can only be filled when the suggested status is Unsatisfactory.'),'warning');return false;}
   checklistData[key]='Tidak Memuaskan'; setChecklistUiValueByKey(key,'Tidak Memuaskan');
@@ -2466,6 +2529,7 @@ function applyReviewFinding(photoId) {
 
 function acceptAllReviewSuggestions(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return;
+  if (!allowApplyAiSuggestion_(photo, 'acceptAllReviewSuggestions')) return false;
   useReviewComment(photoId);
   applyReviewGeneralComment(photoId);
   const checklistOk=applyReviewChecklist(photoId);
@@ -2480,7 +2544,7 @@ function acceptAllReviewSuggestions(photoId) {
 function renderPhotoList() {
   const container=document.getElementById('photoListContainer');
   if(photos.length===0){container.innerHTML='';updatePhotoSummary();return;}
-  container.innerHTML=photos.map((photo,index)=>`<div class="photo-item" data-id="${photo.id}"><div class="photo-item-header"><span class="photo-number">${index+1}</span><span style="font-size:12px;color:var(--text-secondary);">${photo.source==='camera'?'📷':'🖼️'} ${formatFileSize(photo.size)}</span>${photo.reviewAnalysis?`<span class="review-badge" style="margin-left:8px;">✓ ${t('Disemak','Reviewed')}</span>`:''}<button class="photo-remove" onclick="removePhoto(${photo.id})">×</button></div><div class="photo-preview"><img src="${photo.data}" alt="Photo ${index+1}"></div><div class="photo-comment"><label>${t('Komen untuk gambar ini','Comment for this image')}:</label><textarea placeholder="${t('Masukkan komen...','Enter comment...')}" onchange="updatePhotoComment(${photo.id}, this.value)">${escapeHtml(photo.comment||'')}</textarea></div>${renderPhotoReview(photo)}</div>`).join('');
+  container.innerHTML=photos.map((photo,index)=>`<div class="photo-item" data-id="${photo.id}"><div class="photo-item-header"><span class="photo-number">${index+1}</span><span style="font-size:12px;color:var(--text-secondary);">${photo.source==='camera'?'📷':'🖼️'} ${formatFileSize(photo.size)}</span>${photo.reviewAnalysis?`<span class="review-badge" style="margin-left:8px;">✓ ${t('Disemak','Reviewed')}</span>`:''}<button class="photo-remove" onclick="removePhoto(${photo.id})">×</button></div><div class="photo-preview"><img src="${photo.data}" alt="Photo ${index+1}"></div><div class="photo-comment"><label>${t('Komen untuk gambar ini','Comment for this image')}:</label><textarea placeholder="${t('Masukkan komen...','Enter comment...')}" oninput="updatePhotoComment(${photo.id}, this.value)">${escapeHtml(photo.comment||'')}</textarea></div>${renderPhotoReview(photo)}</div>`).join('');
   updatePhotoSummary();
 }
 
@@ -2578,6 +2642,24 @@ function formatFileSize(bytes) {
 // ============================================
 // SUBMISSION - WITH SUCCESS MODAL & AUTO LOGOUT
 // ============================================
+// If photo uploads take a long time, refresh the GPS before final submit.
+// Never re-upload already uploaded photos just because the GPS fix expired.
+async function refreshFinalSubmissionGps_(payload) {
+  const capturedMs = Date.parse(String(payload && payload.gpsCapturedAt || ''));
+  if (!Number.isFinite(capturedMs) || Date.now() - capturedMs > 90000) {
+    const gps = await requireGps_('final-submit');
+    if (!gps.ok) throw new Error('GPS_REQUIRED');
+    payload.lat = session.lat;
+    payload.lng = session.lng;
+    payload.gpsAccuracy = session.accuracy;
+    payload.gpsCapturedAt = session.gpsCapturedAt;
+    payload.gpsSampleCount = session.gpsSampleCount;
+    payload.gpsSpreadM = session.gpsSpreadM;
+  }
+  payload.timestamp = new Date().toISOString();
+  return payload;
+}
+
 async function submitInspection() {
   if (isSubmitting || hasSubmittedCurrent) {
     showToast(t('Laporan sedang/sudah dihantar', 'Report already submitted'), 'warning');
@@ -2588,8 +2670,17 @@ if (!currentRating) {
     showToast(t('Sila pilih rating', 'Please select rating'), 'error');
     return;
   }
+  const findingItems = Object.values(findingsDraft || {});
+  for (let i=0; i<findingItems.length; i++) {
+    const f=findingItems[i];
+    if (!String(f.pic||'').trim() || !String(f.action||'').trim()) {
+      showToast(t(`Lengkapkan PIC dan Tindakan Diperlukan untuk isu #${i+1}.`,
+        `Complete PIC and Action Required for issue #${i+1}.`),'error');
+      return;
+    }
+  }
 
-const stationKey = `${session.month}-${currentTeam.code}-${currentStation}`;
+const stationKey = `${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${currentStation}`;
   if (submittedStations.has(stationKey)) {
     showToast(t('Stesen ini telah diperiksa', 'This station already inspected'), 'error');
     return;
@@ -2605,15 +2696,34 @@ const totalItems = document.querySelectorAll('.status-select').length;
 
 // Offline-first submission: save the complete inspection package locally before any upload.
   if (!navigator.onLine) {
-    const gpsNow = await requireGps_('submit');
-    if (!gpsNow.ok) return;
-    const offlinePayload = buildInspectionPayload_();
-    await queueInspectionOffline_(offlinePayload);
-    showOfflineQueuedSuccessModal_();
+    isSubmitting = true;
+    const offlineBtn = document.getElementById('btnSubmit');
+    offlineBtn.disabled = true;
+    try {
+      if (!(await saveDraft())) throw new Error('DRAFT_SAVE_FAILED');
+      const gpsNow = await requireGps_('submit');
+      if (!gpsNow.ok) return;
+      const offlinePayload = buildInspectionPayload_();
+      await queueInspectionOffline_(offlinePayload);
+      showOfflineQueuedSuccessModal_();
+    } catch (offlineError) {
+      console.error('Offline queue save failed:', offlineError);
+      showToast(t('Pemeriksaan gagal disimpan offline. Draf masih ada; jangan padam data browser.',
+        'Offline save failed. The draft remains; do not clear browser data.'),'error');
+    } finally {
+      isSubmitting = false;
+      offlineBtn.disabled = hasSubmittedCurrent;
+      offlineBtn.textContent = hasSubmittedCurrent ? t('✓ Menunggu Sync','✓ Awaiting Sync') : t('🚀 Hantar Pemeriksaan','🚀 Submit Inspection');
+    }
     return;
   }
 
-isSubmitting = true;
+// Persist all photos and the submission ID before the first network request.
+  if (!(await saveDraft())) {
+    showToast(t('Tidak dapat menyimpan gambar pada peranti. Jangan tutup halaman.', 'Could not save photos on this device. Keep this page open.'), 'error');
+    return;
+  }
+  isSubmitting = true;
   hasSubmittedCurrent = true;
   const btn = document.getElementById('btnSubmit');
   btn.disabled = true;
@@ -2657,13 +2767,14 @@ const photoUrls = [];
 
 payload.photos = photoUrls;
     uploadsCompleted = true;
+    await refreshFinalSubmissionGps_(payload);
     const result = await submitWithRetry(payload);
 
 if (result.ok) {
       submittedStations.add(stationKey);
       localStorage.setItem('dklpo_submitted_stations', JSON.stringify([...submittedStations]));
-      clearDraft();
-      sessionStorage.setItem('dklpo_just_submitted', 'true');
+      await clearDraft();
+      try { sessionStorage.setItem('dklpo_just_submitted', 'true'); } catch (_) {}
 
 // Show success modal instead of toast
       showSubmitSuccessModal(result);
@@ -2699,10 +2810,37 @@ if (result.ok) {
   }
 }
 
+function photoUploadKey_(submissionId, photo, index) {
+  const stableId = String(photo && photo.id != null ? photo.id : `legacy-${index}`).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 70);
+  return `${submissionId}-PHOTO-${stableId}`;
+}
+
+function photoReceiptKey_(submissionId, photo, index) {
+  return 'uploadReceipt:' + photoUploadKey_(submissionId, photo, index);
+}
+
+async function getSavedPhotoReceipt_(submissionId, photo, index) {
+  try {
+    const record = await idbGet_('kv', photoReceiptKey_(submissionId, photo, index));
+    return record && record.value && record.value.url ? record.value : null;
+  } catch (_) { return null; }
+}
+
+async function rememberPhotoReceipt_(submissionId, photo, index, response) {
+  const value = {url:response.url, fileId:response.fileId||'', resourceKey:response.resourceKey||''};
+  try { await idbPut_('kv', {key: photoReceiptKey_(submissionId, photo, index), value}); }
+  catch (err) { console.warn('Photo upload receipt not persisted; server uploadKey still protects retries',err); }
+  return value;
+}
+
 async function uploadPhotoWithRetry(photo, index, retries = 3) {
+  const submissionId = currentSubmissionId || (currentSubmissionId = newSubmissionId_());
+  const saved = await getSavedPhotoReceipt_(submissionId, photo, index);
+  if (saved) return {ok:true, ...saved, fromLocalReceipt:true};
   const payload = {
     action: 'uploadPhoto',
-    uploadKey: `${currentSubmissionId || (currentSubmissionId = newSubmissionId_())}-P${index}`,
+    teamCode: currentTeam.code,
+    uploadKey: photoUploadKey_(submissionId, photo, index),
     month: session.month,
     station: currentStation,
     inspectorName: session.inspectorName,
@@ -2716,6 +2854,7 @@ async function uploadPhotoWithRetry(photo, index, retries = 3) {
   if (!result || !result.ok) {
     throw new Error((result && result.error) || t(`Gagal upload gambar ${index}`, `Failed to upload photo ${index}`));
   }
+  await rememberPhotoReceipt_(submissionId, photo, index, result);
   return result;
 }
 
@@ -2812,7 +2951,7 @@ async function postToWebApp(payload, options = {}) {
 
 function nextStation() {
   const assigned = getAssignedStationsForTeam(currentTeam, session.month);
-  const availableStations = assigned.filter(st => !submittedStations.has(`${session.month}-${currentTeam.code}-${st}`));
+  const availableStations = assigned.filter(st => !submittedStations.has(`${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${st}`));
   const currentIdx = availableStations.indexOf(currentStation);
   const nextStation = availableStations[currentIdx + 1];
 
