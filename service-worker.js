@@ -1,19 +1,19 @@
-const CACHE_NAME = 'kkpas-pwa-v5-3-1-hardened';
-const APP_SHELL = ['./', './manifest.json'];
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzWcWIO8LZMTpEGYtK_MHj6TMXukiFji7LcaLvtYvTxIR2MML2pXyPHjWsrxZAxk0SQ/exec';
+const CACHE_NAME = 'kkpas-pwa-v10-20261028';
+const APP_SHELL = ['./', './index.html', './manifest.json'];
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwHTRO_asLzBFhKwnolGE5egZ0zD3bHust69dROJMLJrwZw-gHNhNQm8u3IK_CbL5bj/exec'; // URL backend pilihan pengguna
 const DB_NAME = 'kkpas-offline-v1';
 const DB_VERSION = 3;
 const MAX_SYNC_ATTEMPTS = 5;
 const RETRY_DELAYS_MS = [60*1000, 5*60*1000, 15*60*1000, 60*60*1000, 6*60*60*1000];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).catch(() => null));
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => Promise.all(APP_SHELL.map(url => cache.add(url).catch(err => { console.warn('KKPAS app shell unavailable:', url, err); return null; })))).catch(() => null));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))))
+    caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('kkpas-pwa-') && key !== CACHE_NAME).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -65,13 +65,23 @@ function syncError_(message, retryable=true, retryAfterMs=0){
 async function formPost_(payload){
   const params=new URLSearchParams();
   Object.entries(payload||{}).forEach(([k,v])=>params.append(k,typeof v==='object'?JSON.stringify(v):String(v??'')));
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000);
   let response;
-  try{
-    response=await fetch(WEB_APP_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params});
-  }catch(err){
-    throw syncError_(err&&err.message?err.message:'NETWORK_ERROR',true);
+  let text;
+  try {
+    response = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
+      signal: controller.signal
+    });
+    text = await response.text();
+  } catch(err) {
+    throw syncError_(err && err.message ? err.message : 'NETWORK_ERROR', true);
+  } finally {
+    clearTimeout(timeoutId);
   }
-  const text=await response.text();
   let data=null;
   try{data=JSON.parse(text)}catch(_){throw syncError_('NON_JSON_RESPONSE',response.status>=500||response.status===429)}
   if(!response.ok||!data||!data.ok){
@@ -107,17 +117,30 @@ async function syncOne_(record){
   record.lastAttemptAt=new Date().toISOString();
   record.nextAttemptAt='';
   await putQueue_(record);
-  const uploaded=Array.isArray(record.uploadedPhotoUrls)?record.uploadedPhotoUrls:[];
   const photos=Array.isArray(record.photos)?record.photos:[];
+  const map={...(record.uploadedPhotoMap||{})};
+  const legacy=Array.isArray(record.uploadedPhotoUrls)?record.uploadedPhotoUrls:[];
+  const uploaded=[];
 
-  for(let i=uploaded.length;i<photos.length;i++){
+  // Map receipts by stable image ID. Never assume image indexes stayed unchanged.
+  for(let i=0;i<photos.length;i++){
     const ph=photos[i];
-    const uploadKey=`${record.id}-P${i+1}`;
-    const r=await formPost_({action:'uploadPhoto',uploadKey,month:record.payload.month,station:record.payload.station,inspectorName:record.payload.inspectorName,base64:ph.data,comment:ph.comment||'',index:i+1,filename:ph.filename||`photo_${i+1}.jpg`});
-    uploaded.push({url:r.url,fileId:r.fileId||'',resourceKey:r.resourceKey||'',comment:ph.comment||'',index:i+1,reviewAnalysis:ph.reviewAnalysis||null,reviewAccepted:ph.reviewAccepted||null,reviewedAt:ph.reviewedAt||''});
-    record.uploadedPhotoUrls=uploaded;
-    await putQueue_(record);
+    const stableId=String(ph&&ph.id!=null?ph.id:`legacy-${i+1}`).replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,70);
+    const uploadKey=`${record.id}-PHOTO-${stableId}`;
+    let receipt=map[uploadKey];
+    if(!receipt && !record.uploadedPhotoMap && legacy[i] && legacy[i].url) receipt=legacy[i];
+    if(!receipt || !receipt.url){
+      const r=await formPost_({action:'uploadPhoto',teamCode:record.payload.teamCode,uploadKey,month:record.payload.month,station:record.payload.station,inspectorName:record.payload.inspectorName,base64:ph.data,comment:ph.comment||'',index:i+1,filename:ph.filename||`photo_${i+1}.jpg`});
+      if(!r||!r.url) throw syncError_('UPLOAD_MISSING_URL',true);
+      receipt={url:r.url,fileId:r.fileId||'',resourceKey:r.resourceKey||''};
+      map[uploadKey]=receipt;
+      record.uploadedPhotoMap=map;
+      await putQueue_(record); // checkpoint immediately after each successful upload
+    }
+    uploaded.push({...receipt,comment:ph.comment||'',index:i+1,reviewAnalysis:ph.reviewAnalysis||null,reviewAccepted:ph.reviewAccepted||null,reviewedAt:ph.reviewedAt||''});
   }
+  record.uploadedPhotoUrls=uploaded;
+  await putQueue_(record);
 
   const payload={...record.payload,action:'submitInspection',clientSubmissionId:record.payload.clientSubmissionId||record.id,offlineQueuedAt:record.createdAt||'',syncAttempt:record.attempts,checklist:JSON.stringify(record.payload.checklist||[]),photos:JSON.stringify(uploaded),findings:record.payload.findings||'[]'};
   const result=await formPost_(payload);
@@ -166,10 +189,16 @@ async function processQueue_(){
   return summary;
 }
 
-self.addEventListener('sync',event=>{if(event.tag==='kkpas-offline-sync')event.waitUntil(processQueue_())});
+let queueSyncPromise_=null;
+function runQueueOnce_(){
+  if(queueSyncPromise_)return queueSyncPromise_;
+  queueSyncPromise_=processQueue_().finally(()=>{queueSyncPromise_=null});
+  return queueSyncPromise_;
+}
+self.addEventListener('sync',event=>{if(event.tag==='kkpas-offline-sync')event.waitUntil(runQueueOnce_())});
 self.addEventListener('message',event=>{
   const d=event.data||{};
-  if(d.type==='SYNC_KKPAS_QUEUE') event.waitUntil(processQueue_().catch(()=>null));
+  if(d.type==='SYNC_KKPAS_QUEUE') event.waitUntil(runQueueOnce_().catch(()=>null));
   if(d.type==='SHOW_NOTIFICATION'&&d.title) event.waitUntil(self.registration.showNotification(d.title,d.options||{}));
 });
 
