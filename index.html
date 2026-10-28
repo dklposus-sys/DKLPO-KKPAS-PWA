@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="ms"><head>
 <meta charset="utf-8">
+<meta name="dklpo-release" content="PEMERIKSA-FASA10-20261028">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0b1220">
 <title>KKPAS Monthly Inspection - Desa Kim Loong Palm Oil Sdn Bhd</title>
@@ -648,6 +649,24 @@ text-align: center;
 .draft-box p { color: var(--text-secondary); margin-bottom: 20px; }
 .draft-buttons { display: flex; gap: 12px; }
 .draft-buttons button { flex: 1; }
+
+/* Jarak pemeriksa ke stesen: berpandukan STATION_GEOFENCE Backend Fasa 4_5. */
+.geo-distance-card{margin-bottom:14px;padding:15px;border:1px solid var(--stroke,rgba(148,163,184,.3));border-left:5px solid #64748b;border-radius:14px;background:var(--surface,rgba(100,116,139,.06));}
+.geo-distance-card.geo-in{border-left-color:#16a34a;background:rgba(22,163,74,.07)}
+.geo-distance-card.geo-warn{border-left-color:#d97706;background:rgba(245,158,11,.10)}
+.geo-distance-card.geo-out{border-left-color:#dc2626;background:rgba(239,68,68,.10)}
+.geo-distance-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.geo-distance-title{font-size:13px;font-weight:700;color:var(--text,inherit)}
+.geo-distance-status{font-size:12px;font-weight:800;letter-spacing:.01em}
+.geo-in .geo-distance-status{color:#15803d}.geo-warn .geo-distance-status{color:#b45309}.geo-out .geo-distance-status{color:#dc2626}
+.geo-distance-metrics{display:flex;flex-wrap:wrap;gap:10px 18px;margin:10px 0 6px;font-size:13px;color:var(--text,inherit)}
+.geo-distance-metrics b{font-size:18px;font-variant-numeric:tabular-nums;display:inline-block}.geo-distance-metrics small{font-size:12px;color:var(--text-secondary,inherit)}
+.geo-distance-hint{font-size:12px;line-height:1.45;color:var(--text-secondary,inherit)}
+.geo-distance-bottom{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:9px}
+.geo-distance-updated{font-size:11px;color:var(--text-secondary,inherit)}
+.geo-distance-refresh{border-radius:10px;border:1px solid currentColor;padding:8px 12px;min-height:38px;background:transparent;color:var(--text,inherit);font-size:12px;font-weight:700;cursor:pointer}
+.geo-distance-refresh:disabled{opacity:.55;cursor:wait}
+
 </style>
 <base target="_blank">
 <base target="_blank">
@@ -874,7 +893,6 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 <label data-ms="Bulan" data-en="Month">Bulan</label>
 <select class="form-control" id="loginMonth"></select>
 </div>
-
 <button class="btn-submit" onclick="doLogin()" id="btnLogin">
 🔐 <span data-ms="Log Masuk" data-en="Login">Log Masuk</span>
 </button>
@@ -914,6 +932,25 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 </div>
 </div>
 
+
+<!-- INDICATOR JARAK GPS - paparan sahaja, semakan rasmi kekal di backend Fasa 4_5 -->
+<section class="geo-distance-card" id="geoDistanceCard" aria-label="Jarak GPS ke stesen">
+  <div class="geo-distance-head">
+    <span class="geo-distance-title" id="geoDistanceTitle">📍 Jarak GPS ke stesen</span>
+    <span class="geo-distance-status" id="geoDistanceStatus" role="status" aria-live="polite">Menunggu GPS</span>
+  </div>
+  <div class="geo-distance-metrics">
+    <span><small id="geoDistanceMetersLabel">Jarak:</small> <b id="geoDistanceMeters">—</b></span>
+    <span><small id="geoDistanceRadiusLabel">Had stesen:</small> <b id="geoDistanceRadius">—</b></span>
+    <span><small id="geoDistanceAccuracyLabel">Ketepatan:</small> <b id="geoDistanceAccuracy">—</b></span>
+  </div>
+  <div class="geo-distance-hint" id="geoDistanceHint">Sila pilih stesen dan benarkan lokasi.</div>
+  <div class="geo-distance-bottom">
+    <span class="geo-distance-updated" id="geoDistanceUpdated">Belum ada bacaan</span>
+    <button type="button" id="geoDistanceRefreshBtn" class="geo-distance-refresh" onclick="refreshGeoDistanceManually_()">↻ Semak Jarak</button>
+  </div>
+</section>
+
 <!-- Station Locked Indicator -->
 <div class="station-locked" id="stationLocked" style="display: none;">
 <span class="icon">🔒</span>
@@ -926,6 +963,8 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 <select class="form-control" id="stationSelect" onchange="changeStation(this.value)">
 <option value="" data-ms="-- Pilih Stesen --" data-en="-- Select Station --">-- Pilih Stesen --</option>
 </select>
+<button type="button" class="btn-secondary" style="width:100%;margin-top:10px;min-height:42px;" onclick="refreshStationListManually_()"
+ data-ms="↻ Semak Semula Status Stesen" data-en="↻ Refresh Station Status">↻ Semak Semula Status Stesen</button>
 </div>
 
 <!-- Checklist Container -->
@@ -975,7 +1014,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 <!-- Comment -->
 <div class="card-mobile">
 <label data-ms="Komen Keseluruhan" data-en="General Comment">Komen Keseluruhan</label>
-<textarea class="form-control" id="inspectComment" rows="3" placeholder="Komen keseluruhan... / General comments..." oninput="saveDraft()"></textarea>
+<textarea class="form-control" id="inspectComment" rows="3" placeholder="Komen keseluruhan... / General comments..." oninput="scheduleDraftSave_()"></textarea>
 </div>
 
 <!-- AI Insight -->
@@ -1023,7 +1062,7 @@ html:nth-of-type(1) > body:nth-of-type(1) > div.page.active:nth-of-type(7) > div
 // ============================================
 // CONFIGURATION
 // ============================================
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby8zCc5JTD6pQkDAEOWbGLsCpMkiGnDFhyh82DZ7qn7-R-SyaJppKBslB94oZhcOUBr/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwHTRO_asLzBFhKwnolGE5egZ0zD3bHust69dROJMLJrwZw-gHNhNQm8u3IK_CbL5bj/exec";
 const PHOTO_REVIEW_ACTION = "reviewPhoto";
 const MAX_PHOTO_KB = 250;
 const MAX_PHOTOS = 12;
@@ -1068,7 +1107,12 @@ async function collectGpsSamples_() {
     try {
       const pos = await getCurrentPositionAsync({ enableHighAccuracy: true, timeout: 9000, maximumAge: 0 });
       const c = pos && pos.coords;
-      if (c && isFinite(c.latitude) && isFinite(c.longitude)) {
+      const fixTimestamp = Number(pos && pos.timestamp || 0);
+      const nowMs = Date.now();
+      // Ignore stale device fixes; 60s threshold does not require false GPS precision.
+      if (fixTimestamp && Math.abs(nowMs - fixTimestamp) > 60000) continue;
+      if (c && isFinite(c.latitude) && isFinite(c.longitude) &&
+          Math.abs(Number(c.latitude)) <= 90 && Math.abs(Number(c.longitude)) <= 180) {
         samples.push({
           lat: Number(c.latitude),
           lng: Number(c.longitude),
@@ -1115,6 +1159,9 @@ async function requireGps_(context) {
     session.gpsCapturedAt = new Date().toISOString();
     session.gpsSampleCount = summary.count;
     session.gpsSpreadM = summary.spreadM;
+    // Bacaan disahkan melalui beberapa sampel; penyegar indikator tanpa mengubah payload.
+    geoLiveFix_ = {lat, lng, accuracy: (Number.isFinite(acc)?acc:null), timestamp: Date.now()};
+    renderGeoDistance_();
 
     if (isFinite(acc) && acc > GPS_WEAK_ACCURACY_M) {
       showToast(t('Isyarat GPS lemah tetapi masih dalam had. Sila bergerak ke kawasan terbuka jika boleh.', 'GPS signal is weak but within the allowed limit. Move to an open area if possible.'), 'warning');
@@ -1133,6 +1180,193 @@ async function requireGps_(context) {
     return { ok: false, error: code };
   }
 }
+
+
+// ========== INDICATOR JARAK GPS - Backend Fasa 4_5 kekal tanpa perubahan ==========
+// Salinan geofence rasmi daripada STATION_GEOFENCE dalam backend Fasa 4_5.
+// Jika pentadbir mengubah koordinat/radius rasmi, selaraskan profil di kedua-dua frontend.
+const GEO_STATION_PROFILES_ = [
+  {station:"Office",lat:5.128742190456492,lng:116.26378793166668,radiusM:20,aliases:["Office"]},
+  {station:"Clinic & Canteen",lat:5.128333046519395,lng:116.26350131137663,radiusM:50,aliases:["Clinic & Canteen", "Clinic and Canteen"]},
+  {station:"Guard House",lat:5.12779270694548,lng:116.2636083700089,radiusM:15,aliases:["Guard House"]},
+  {station:"FFB Grading",lat:5.129260201156247,lng:116.26413944201781,radiusM:50,aliases:["FFB Grading"]},
+  {station:"Lab",lat:5.12885413363382,lng:116.26380317168893,radiusM:20,aliases:["Lab", "Lab-"]},
+  {station:"Sterilizer",lat:5.1287864091100515,lng:116.26480570815934,radiusM:80,aliases:["Sterilizer", "Sterilize"]},
+  {station:"Press Station",lat:5.128100186317871,lng:116.26499444188907,radiusM:25,aliases:["Press Station"]},
+  {station:"Tippler",lat:5.128103099843527,lng:116.26471440697777,radiusM:25,aliases:["Tippler"]},
+  {station:"Kernel Plant",lat:5.128242456633896,lng:116.26561861171,radiusM:25,aliases:["Kernel Plant", "Kernel Pant"]},
+  {station:"Workshop",lat:5.1296469280198265,lng:116.26579220656964,radiusM:50,aliases:["Workshop"]},
+  {station:"Store",lat:5.129459080436535,lng:116.26580023008653,radiusM:25,aliases:["Store"]},
+  {station:"Biogas",lat:5.128435465684044,lng:116.26651923226994,radiusM:200,aliases:["Biogas"]},
+  {station:"Effluent",lat:5.126971253664455,lng:116.26726284109492,radiusM:200,aliases:["Effluent"]},
+  {station:"Solvent Plant",lat:5.128158491597465,lng:116.26601336881464,radiusM:50,aliases:["Solvent Plant"]},
+  {station:"Boiler House",lat:5.127469831708784,lng:116.26565466371683,radiusM:50,aliases:["Boiler House"]},
+];
+const GEO_FIX_FRESH_MS_ = 60000;
+let geoLiveFix_ = null;
+let geoLiveWatchId_ = null;
+let geoDistanceRefreshBusy_ = false;
+let geoPreviousStation_ = '';
+let geoPreviousStatus_ = '';
+let geoAgeTimerId_ = null;
+
+function geoStationProfile_(name) {
+  const key = String(name || '').trim().toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim();
+  return GEO_STATION_PROFILES_.find(p => [p.station].concat(p.aliases || []).some(n =>
+    String(n).trim().toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim() === key)) || null;
+}
+
+function geoDistanceSnapshot_(station, fix, now = Date.now()) {
+  const profile = geoStationProfile_(station);
+  if (!station) return {status:'NO_STATION', profile};
+  if (!profile) return {status:'UNKNOWN_ZONE', profile};
+  if (!fix || fix.lat === null || fix.lng === null || fix.lat === undefined || fix.lng === undefined || fix.lat === '' || fix.lng === '' ||
+      !Number.isFinite(Number(fix.lat)) || !Number.isFinite(Number(fix.lng)) ||
+      Math.abs(Number(fix.lat)) > 90 || Math.abs(Number(fix.lng)) > 180) return {status:'NO_GPS', profile};
+  const ts = Number(fix.timestamp);
+  if (!Number.isFinite(ts) || ts <= 0 || Math.abs(now - ts) > GEO_FIX_FRESH_MS_) return {status:'STALE', profile};
+  const acc = fix.accuracy === '' || fix.accuracy === null || fix.accuracy === undefined ? NaN : Number(fix.accuracy);
+  const distanceM = Math.round(haversineMetersClient_(Number(fix.lat), Number(fix.lng), profile.lat, profile.lng));
+  if (!Number.isFinite(distanceM)) return {status:'NO_GPS', profile};
+  const toleranceM = Number.isFinite(acc) && acc >= 0 ? Math.min(25, Math.max(5, Math.round(acc))) : 0;
+  let status = 'IN_ZONE';
+  if (!Number.isFinite(acc) || acc < 0 || acc > GPS_REJECT_ACCURACY_M) status = 'WEAK_GPS';
+  else if (distanceM > profile.radiusM + toleranceM) status = 'OUTSIDE';
+  else if (distanceM > profile.radiusM) status = 'BORDER';
+  else if (acc > Math.max(25,profile.radiusM)) status = 'WEAK_GPS';
+  return {status, profile, distanceM, accuracyM: Number.isFinite(acc) ? Math.round(acc) : null, toleranceM, timestamp:ts};
+}
+
+function geoBestRecentFix_() {
+  const sampled = session && session.gpsCapturedAt ? {
+    lat: session.lat, lng: session.lng, accuracy: session.accuracy,
+    timestamp: Date.parse(session.gpsCapturedAt)
+  } : null;
+  const live = geoLiveFix_;
+  const now = Date.now();
+  const isFresh = f => f && Number.isFinite(Number(f.timestamp)) && Math.abs(now - Number(f.timestamp)) <= GEO_FIX_FRESH_MS_;
+  // Paparan semasa boleh ikut watchPosition; GPS laporan tetap menggunakan requireGps_ tiga sampel.
+  if (isFresh(live) && (!isFresh(sampled) || live.timestamp > sampled.timestamp)) return live;
+  return sampled || live;
+}
+
+function renderGeoDistance_() {
+  const card = document.getElementById('geoDistanceCard');
+  if (!card) return;
+  const snap = geoDistanceSnapshot_(currentStation, geoBestRecentFix_());
+  const ms = inspectionLang !== 'en';
+  const s = (bm, en) => ms ? bm : en;
+  const labels = {
+    IN_ZONE: s('✅ Dalam kawasan','✅ Within station area'),
+    BORDER: s('⚠️ Berhampiran sempadan','⚠️ Near boundary'),
+    WEAK_GPS: s('⚠️ Ketepatan GPS lemah','⚠️ Low GPS accuracy'),
+    OUTSIDE: s('🚨 LUAR KAWASAN STESEN','🚨 OUTSIDE STATION AREA'),
+    STALE: s('⏳ Bacaan GPS lama','⏳ GPS reading is stale'),
+    NO_GPS: s('⌛ Menunggu GPS','⌛ Waiting for GPS'),
+    NO_STATION: s('Pilih stesen','Select station'),
+    UNKNOWN_ZONE: s('Stesen tiada koordinat','Station coordinates unavailable')
+  };
+  const hints = {
+    IN_ZONE:s('Anda berada dalam radius stesen berdasarkan bacaan GPS.','GPS indicates you are within the station radius.'),
+    BORDER:s('Berhampiran sempadan. Toleransi ketepatan GPS digunakan; semak lokasi sebelum hantar.','Near boundary. GPS tolerance applies; verify position before submitting.'),
+    WEAK_GPS:s('Bacaan GPS kurang tepat. Cuba bergerak ke kawasan terbuka dan semak semula.','GPS is imprecise. Try an open area and refresh.'),
+    OUTSIDE:s('AMARAN: Anda berada di luar had kawasan. Sila pergi ke stesen dan semak semula sebelum hantar.','WARNING: You are beyond the permitted area. Move to the station and refresh before submitting.'),
+    STALE:s('Lokasi terakhir lebih 60 saat lalu. Tekan Semak Jarak untuk bacaan terkini.','Last fix is over 60 seconds old. Refresh your location.'),
+    NO_GPS:s('Benarkan akses lokasi pada telefon untuk mengukur jarak.','Enable location permission on the phone to measure distance.'),
+    NO_STATION:s('Pilih stesen untuk melihat jarak GPS.','Select a station to see GPS distance.'),
+    UNKNOWN_ZONE:s('Koordinat rasmi stesen ini belum ditetapkan. Hubungi Admin.','This station has no official coordinates. Contact Admin.')
+  };
+  card.classList.remove('geo-in','geo-warn','geo-out');
+  card.classList.add(snap.status==='IN_ZONE'?'geo-in':snap.status==='OUTSIDE'?'geo-out':'geo-warn');
+  document.getElementById('geoDistanceTitle').textContent = s('📍 Jarak GPS ke stesen','📍 GPS distance to station');
+  document.getElementById('geoDistanceStatus').textContent = labels[snap.status] || '-';
+  document.getElementById('geoDistanceMetersLabel').textContent = s('Jarak:','Distance:');
+  document.getElementById('geoDistanceMeters').textContent = snap.distanceM == null?'—':snap.distanceM+' m';
+  document.getElementById('geoDistanceRadiusLabel').textContent = s('Had stesen:','Station radius:');
+  document.getElementById('geoDistanceRadius').textContent = snap.profile ? snap.profile.radiusM+' m':'—';
+  document.getElementById('geoDistanceAccuracyLabel').textContent = s('Ketepatan GPS:','GPS accuracy:');
+  document.getElementById('geoDistanceAccuracy').textContent = snap.accuracyM == null?'—':'±'+snap.accuracyM+' m';
+  document.getElementById('geoDistanceHint').textContent = hints[snap.status] || '';
+  document.getElementById('geoDistanceUpdated').textContent = snap.timestamp && !['STALE'].includes(snap.status)
+    ? s('Bacaan: ','Reading: ') + new Date(snap.timestamp).toLocaleTimeString(ms?'ms-MY':'en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
+    : s('Perlu bacaan GPS terkini','A fresh GPS reading is required');
+  const refresh = document.getElementById('geoDistanceRefreshBtn');
+  if (refresh) refresh.textContent = geoDistanceRefreshBusy_ ? s('⏳ Menyemak GPS...','⏳ Checking GPS...') : s('↻ Semak Jarak','↻ Refresh Distance');
+  if (currentStation !== geoPreviousStation_) {geoPreviousStatus_='';geoPreviousStation_=currentStation || '';}
+  if (snap.status==='OUTSIDE' && geoPreviousStatus_!=='OUTSIDE' && !isSubmitting) {
+    showToast(s('⚠️ Di luar kawasan stesen! Pergi ke lokasi stesen dan semak GPS semula.',
+      '⚠️ Outside station area! Go to the station and refresh GPS.'),'warning');
+  }
+  geoPreviousStatus_ = snap.status;
+  return snap;
+}
+
+function geoReceiveLivePosition_(pos) {
+  if (!currentStation || !document.getElementById('pageInspection')?.classList.contains('active')) return;
+  const c = pos && pos.coords;
+  const now = Date.now();
+  const ts = Number(pos && pos.timestamp);
+  if (!c || !Number.isFinite(ts) || Math.abs(now-ts)>GEO_FIX_FRESH_MS_ ||
+      !Number.isFinite(Number(c.latitude)) || !Number.isFinite(Number(c.longitude)) ||
+      Math.abs(Number(c.latitude))>90 || Math.abs(Number(c.longitude))>180) return;
+  const a = c.accuracy;
+  geoLiveFix_ = {lat:Number(c.latitude),lng:Number(c.longitude),accuracy:(a!==null && a!==undefined && a!=='' && Number.isFinite(Number(a)))?Number(a):null,timestamp:ts};
+  renderGeoDistance_();
+}
+function stopGeoDistanceWatch_() {
+  if (geoLiveWatchId_ !== null && navigator.geolocation && navigator.geolocation.clearWatch) {
+    try {navigator.geolocation.clearWatch(geoLiveWatchId_);} catch(_){}
+  }
+  geoLiveWatchId_ = null;
+}
+function startGeoDistanceWatch_() {
+  if (!currentStation || document.hidden || !document.getElementById('pageInspection')?.classList.contains('active')) return;
+  if (geoLiveWatchId_ !== null || !navigator.geolocation || !navigator.geolocation.watchPosition) return;
+  try {
+    geoLiveWatchId_ = navigator.geolocation.watchPosition(geoReceiveLivePosition_, error => {
+      console.warn('Live distance GPS:',error && error.code);
+      // Bacaan lama akan bertukar kepada STALE secara automatik, bukan menunjukkan status hijau yang palsu.
+      renderGeoDistance_();
+    },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+  } catch(err) {console.warn('Distance watch unavailable:',err);}
+  if (geoAgeTimerId_ === null) geoAgeTimerId_ = setInterval(() => {
+    if (currentStation && !document.hidden && document.getElementById('pageInspection')?.classList.contains('active')) renderGeoDistance_();
+  },15000);
+}
+async function refreshGeoDistanceManually_() {
+  if (geoDistanceRefreshBusy_ || !currentStation) return;
+  geoDistanceRefreshBusy_ = true;
+  const btn = document.getElementById('geoDistanceRefreshBtn');
+  if (btn) btn.disabled = true;
+  renderGeoDistance_();
+  try {
+    const fix = await requireGps_('distance');
+    if (!fix.ok) geoLiveFix_=null;
+    renderGeoDistance_();
+    startGeoDistanceWatch_();
+  } finally {
+    geoDistanceRefreshBusy_=false;
+    if (btn) btn.disabled=false;
+    renderGeoDistance_();
+  }
+}
+function assertGeoInsideForSubmit_(fix) {
+  // Semakan awal mesra pengguna; semakan muktamad masih validateSubmissionGeo_ di backend.
+  const s=geoDistanceSnapshot_(currentStation,{lat:fix.lat,lng:fix.lng,accuracy:fix.accuracy,
+    timestamp:Date.parse(String(fix.capturedAt || session?.gpsCapturedAt || ''))});
+  renderGeoDistance_();
+  if (s.status==='OUTSIDE') {
+    showToast(t('🚨 Anda di luar kawasan stesen ('+s.distanceM+' m). Pergi ke stesen dan semak jarak sebelum hantar.',
+      '🚨 You are outside the station area ('+s.distanceM+' m). Go to the station and refresh before submitting.'),'error');
+    throw new Error('GPS_OUTSIDE_PRECHECK');
+  }
+  return s;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopGeoDistanceWatch_();
+  else {renderGeoDistance_();startGeoDistanceWatch_();}
+});
+// ========== TAMAT INDIKATOR JARAK GPS ==========
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -1275,13 +1509,15 @@ const ZONE_MAP_MAX_SCALE = 4;
 // ============================================
 function setLanguage(lang) {
   currentLang = lang;
+  if (!currentStation) inspectionLang = lang; // Kekalkan bahasa checklist selepas pemeriksaan bermula.
   document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
   document.getElementById(`btn-${lang}`).classList.add('active');
   document.querySelectorAll(`[data-${lang}]`).forEach(el => {
     el.textContent = el.getAttribute(`data-${lang}`);
   });
   localStorage.setItem('dklpo_lang', lang);
-  if (currentStation) loadStation(currentStation);
+  // Kekalkan borang semasa: loadStation() memadam gambar, checklist dan submission ID.
+  renderGeoDistance_();
 }
 
 function t(ms, en) {
@@ -1473,21 +1709,41 @@ function newSubmissionId_() {
   return 'SUB-' + Date.now() + '-' + Math.random().toString(36).slice(2,12);
 }
 
+async function buildUploadedPhotoMapForQueue_(previous, submissionId) {
+  const map = {...(previous && previous.uploadedPhotoMap || {})};
+  const legacy = Array.isArray(previous && previous.uploadedPhotoUrls) ? previous.uploadedPhotoUrls : [];
+  for (let i=0; i<photos.length; i++) {
+    const key = photoUploadKey_(submissionId, photos[i], i+1);
+    if (map[key] && map[key].url) continue;
+    const old = legacy[i];
+    // Legacy indexed receipts only apply when photo index is unchanged in a previous queue.
+    if (old && old.url && previous && previous.photos && previous.photos[i] &&
+        String(previous.photos[i].id) === String(photos[i].id)) map[key] = old;
+    else {
+      const saved = await getSavedPhotoReceipt_(submissionId, photos[i], i+1);
+      if (saved) map[key] = saved;
+    }
+  }
+  return map;
+}
+
 async function queueInspectionOffline_(basePayload) {
   const queueId = String(basePayload.clientSubmissionId || currentSubmissionId || newSubmissionId_());
   basePayload.clientSubmissionId = queueId;
+  const previous = await idbGet_('offlineQueue', queueId).catch(() => null);
   const record = {
     id: queueId,
-    createdAt: new Date().toISOString(),
-    stationKey: `${session.month}-${currentTeam.code}-${currentStation}`,
+    createdAt: previous && previous.createdAt || new Date().toISOString(),
+    stationKey: `${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${currentStation}`,
     payload: basePayload,
     photos: photos.map((p, idx) => ({
       id:p.id, data:p.data, comment:p.comment||'', size:p.size||0, source:p.source||'', filename:p.filename||`photo_${idx+1}.jpg`,
       reviewAnalysis:p.reviewAnalysis||null, reviewAccepted:p.reviewAccepted||null, reviewedAt:p.reviewedAt||''
     })),
-    uploadedPhotoUrls: [],
+    uploadedPhotoUrls: Array.isArray(previous && previous.uploadedPhotoUrls) ? previous.uploadedPhotoUrls : [],
+    uploadedPhotoMap: await buildUploadedPhotoMapForQueue_(previous, queueId),
     status: 'QUEUED',
-    attempts: 0,
+    attempts: Number(previous && previous.attempts || 0),
     nextAttemptAt: '',
     lastError: ''
   };
@@ -1507,7 +1763,7 @@ async function getOfflineQueueCount_() {
 
 function isLikelyNetworkError_(err) {
   const msg=String(err&&err.message?err.message:err||'');
-  return !navigator.onLine || /Failed to fetch|NetworkError|Load failed|AbortError|CORS|timeout|timed out/i.test(msg);
+  return !navigator.onLine || /Failed to fetch|NetworkError|Load failed|AbortError|CORS|timeout|timed out|Tidak dapat berhubung dengan Apps Script|Unable to reach the Apps Script/i.test(msg);
 }
 
 function buildInspectionPayload_() {
@@ -1517,6 +1773,7 @@ function buildInspectionPayload_() {
     station: currentStation,
     inspectorName: session.inspectorName,
     teamCode: currentTeam.code,
+    year: session.year || new Date().getFullYear(),
     rating: currentRating,
     comment: document.getElementById('inspectComment').value,
     checklist: Object.entries(checklistData).map(([k, v]) => ({ item: k, status: v })),
@@ -1535,6 +1792,12 @@ function buildInspectionPayload_() {
   };
   payload.findings = JSON.stringify(Object.values(findingsDraft || {}));
   return payload;
+}
+
+let pendingDraftTimer_ = null;
+function scheduleDraftSave_() {
+  if (pendingDraftTimer_) clearTimeout(pendingDraftTimer_);
+  pendingDraftTimer_ = setTimeout(() => { pendingDraftTimer_=null; saveDraft(); }, 650);
 }
 
 function startAutoSave() {
@@ -1589,6 +1852,7 @@ function showAutoSaveIndicator(state = 'saving') {
   if (text) text.textContent = t('Menyimpan...', 'Saving...');
 }
 
+let kkpasDraftWriteChain_ = Promise.resolve();
 async function saveDraft() {
   if (!currentStation || hasSubmittedCurrent) return;
   showAutoSaveIndicator('saving');
@@ -1596,35 +1860,37 @@ async function saveDraft() {
     const draft = {
       id: KKPAS_DRAFT_KEY,
       station: currentStation,
-      checklist: checklistData,
-      findings: findingsDraft,
+      checklist: {...checklistData},
+      findings: JSON.parse(JSON.stringify(findingsDraft || {})),
       photos: photos.map(p => ({ ...p })),
       rating: currentRating,
       comment: document.getElementById('inspectComment').value,
       aiInsight: aiInsightText || '',
-      submissionId: currentSubmissionId || '',
+      submissionId: currentSubmissionId || (currentSubmissionId = newSubmissionId_()),
       timestamp: Date.now(),
       session: session,
       inspectionLang: inspectionLang
     };
-    await idbPut_('drafts', draft);
+    kkpasDraftWriteChain_ = kkpasDraftWriteChain_.catch(()=>{}).then(()=>idbPut_('drafts', draft));
+    await kkpasDraftWriteChain_;
     try { sessionStorage.setItem('dklpo_draft_exists', String(draft.timestamp)); } catch (_) {}
     showAutoSaveIndicator('saved');
+    return true;
   } catch (e) {
     console.error('Draft save failed:', e);
     showAutoSaveIndicator('error');
     showToast(t('Draf gagal disimpan pada peranti.', 'Draft could not be saved on this device.'), 'warning');
+    return false;
   }
 }
 
 async function checkForDraft() {
   try {
     const data = await idbGet_('drafts', KKPAS_DRAFT_KEY);
-    if (data && Date.now() - Number(data.timestamp || 0) < 24 * 60 * 60 * 1000) {
+    if (data) {
       document.getElementById('draftModal').classList.add('active');
       return true;
     }
-    if (data) await idbDelete_('drafts', KKPAS_DRAFT_KEY);
   } catch (e) { console.warn('Draft check failed:', e); }
   return false;
 }
@@ -1636,9 +1902,21 @@ async function restoreDraft() {
   if (draft.session && !session) session = draft.session;
   if (draft.inspectionLang) inspectionLang = draft.inspectionLang;
   currentTeam = session && session.team ? session.team : currentTeam;
+  if(!currentTeam || !session){showToast(t('Sila log masuk sebelum memulihkan draf.', 'Login before restoring the draft.'), 'error');return;}
+  if(draft.session && (draft.session.team?.code !== session.team?.code ||
+      draft.session.month !== session.month || Number(draft.session.year||0)!==Number(session.year||0))){
+    showToast(t('Draf milik pasukan/bulan/tahun lain.', 'Draft belongs to another team/month/year.'),'error');
+    return;
+  }
   document.getElementById('pageLogin').classList.remove('active');
   document.getElementById('pageInspection').classList.add('active');
   document.getElementById('btnLogout').style.display = 'block';
+  await refreshSubmittedStationsFromServer_();
+  if (submittedStations.has(stationStatusKey_(draft.station))) {
+    showToast(t('Pemeriksaan stesen ini masih aktif atau menunggu sync. Draf disimpan.',
+      'Station inspection is still active or queued. Draft is preserved.'), 'warning');
+    return;
+  }
   loadStation(draft.station);
 
   checklistData = draft.checklist || {};
@@ -1679,6 +1957,7 @@ async function discardDraft() {
 }
 
 async function clearDraft() {
+  await kkpasDraftWriteChain_.catch(()=>{});
   await idbDelete_('drafts', KKPAS_DRAFT_KEY).catch(()=>{});
   try { sessionStorage.removeItem('dklpo_draft_exists'); } catch (_) {}
   stopAutoSave();
@@ -1767,9 +2046,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-// Prevent accidental back button
+// Status aktif disemak semula apabila pengguna kembali ke tab.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && session && currentTeam) refreshStationStateOnReturn_();
+  });
+  window.addEventListener('online', () => {
+    if (session && currentTeam) refreshStationStateOnReturn_();
+  });
+
+  // Prevent accidental back button
   updateNetworkStateUi_();
-  window.addEventListener('online', async () => { updateNetworkStateUi_(); showSyncBanner_(t('Internet kembali. Menyegerakkan pemeriksaan offline...', 'Internet restored. Syncing offline inspections...')); await registerOfflineSync_(); refreshNotificationCentre_(false); });
+  window.addEventListener('online', async () => { updateNetworkStateUi_(); showSyncBanner_(t('Internet kembali. Menyegerakkan pemeriksaan offline...', 'Internet restored. Syncing offline inspections...')); await registerOfflineSync_(); await refreshSubmittedStationsFromServer_(); refreshNotificationCentre_(false); });
   window.addEventListener('offline', () => { updateNetworkStateUi_(); showSyncBanner_(t('Offline: pemeriksaan masih boleh diteruskan dan akan disimpan pada peranti.', 'Offline: inspection can continue and will be stored on this device.'), 5000); });
   setTimeout(() => { refreshNotificationCentre_(false); registerPeriodicReminder_(); registerOfflineSync_(); }, 800);
 
@@ -1827,6 +2114,7 @@ session = {
     team: currentTeam,
     inspectorName: inspectorName,
     month: month,
+    year: new Date().getFullYear(),
     loginTime: Date.now(),
     expiry: Date.now() + (30 * 24 * 60 * 60 * 1000)
   };
@@ -1846,16 +2134,20 @@ const btn = document.getElementById('btnLogin');
 completeLogin();
 }
 
-function completeLogin() {
+async function completeLogin() {
   localStorage.setItem('dklpo_mobile_session', JSON.stringify(session));
   showToast(t('Log masuk berjaya', 'Login successful'), 'success');
-  showInspectionPage();
+  const hasDraft = await checkForDraft();
+  if (!hasDraft) showInspectionPage();
 }
 
 async function doLogout(options = {}) {
   const ask = options.confirm !== false;
   if (!ask || confirm(t('Pasti untuk keluar?', 'Confirm logout?'))) {
-    await clearDraft();
+    // Preserve latest comments and image evidence when logging out.
+    if (pendingDraftTimer_) {clearTimeout(pendingDraftTimer_);pendingDraftTimer_=null;}
+    await saveDraft();
+    await kkpasDraftWriteChain_.catch(()=>{});
     localStorage.removeItem('dklpo_mobile_session');
     session = null;
     currentTeam = null;
@@ -1866,7 +2158,7 @@ async function doLogout(options = {}) {
 // ============================================
 // INSPECTION PAGE
 // ============================================
-function showInspectionPage() {
+async function showInspectionPage(skipRemoteRefresh = false) {
   if (session && session.expiry && Date.now() > session.expiry) {
     showToast(t('Sesi tamat. Sila log masuk semula.', 'Session expired. Please login again.'), 'error');
     localStorage.removeItem('dklpo_mobile_session');
@@ -1880,6 +2172,9 @@ document.getElementById('pageLogin').classList.remove('active');
 
 currentTeam = session.team;
 
+// Sinkronkan dengan rekod aktif Admin sebelum membina senarai stesen.
+if (!skipRemoteRefresh) await refreshSubmittedStationsFromServer_();
+if (!session || !currentTeam) return;
 const assigned = getAssignedStationsForTeam(currentTeam, session.month);
 
 if (assigned.length === 0) {
@@ -1890,11 +2185,19 @@ if (assigned.length === 0) {
 const stationSelect = document.getElementById('stationSelect');
   stationSelect.innerHTML = `<option value="">-- ${t('Pilih Stesen', 'Select Station')} --</option>`;
 
-const availableStations = assigned.filter(st => !submittedStations.has(`${session.month}-${currentTeam.code}-${st}`));
+const availableStations = assigned.filter(st => !submittedStations.has(`${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${st}`));
 
 if (availableStations.length === 0) {
-    showToast(t('Semua stesen telah diperiksa!', 'All stations completed!'), 'success');
-    setTimeout(() => doLogout(), 2000);
+    // Jangan log keluar automatik: Admin mungkin memadam rekod dan pengguna perlu semak semula.
+    currentStation = null;
+    stationSelect.value = '';
+    document.getElementById('stationSelector').style.display = 'block';
+    document.getElementById('checklistContainer').replaceChildren();
+    document.getElementById('currentStationBadge').textContent = '-';
+    stopGeoDistanceWatch_();
+    renderGeoDistance_();
+    showToast(t('Tiada stesen tersedia. Tekan Semak Semula selepas Admin memadam pemeriksaan.',
+      'No station available. Tap Refresh after Admin deletes an inspection.'), 'warning');
     return;
   }
 
@@ -1905,12 +2208,116 @@ availableStations.forEach(st => {
     stationSelect.appendChild(opt);
   });
 
-if (assigned.length > 1) {
-    document.getElementById('stationSelector').style.display = 'block';
-  }
+document.getElementById('stationSelector').style.display = 'block';
 
 loadStation(availableStations[0]);
   startAutoSave();
+}
+
+// PEMBETULAN STATUS STESEN (Backend Fasa 4_5 dikekalkan):
+// Semak rekod aktif pada Google Sheets melalui getInspectorState.
+// Rekod yang sudah dipadam Admin TIDAK boleh kekal terkunci oleh localStorage.
+let stationStatusRefreshInFlight_ = null;
+function stationStatusKey_(station) {
+  if (!session || !currentTeam) return '';
+  return `${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${station}`;
+}
+
+async function refreshSubmittedStationsFromServer_() {
+  if (!session || !currentTeam) return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+  if (stationStatusRefreshInFlight_) return stationStatusRefreshInFlight_;
+
+  const requestScope = {
+    year: Number(session.year || new Date().getFullYear()),
+    month: String(session.month || ''),
+    teamCode: String(currentTeam.code || '')
+  };
+  stationStatusRefreshInFlight_ = (async () => {
+    try {
+      const response = await postToWebApp({action:'getInspectorState',...requestScope},
+        {timeoutMs:15000,retries:1});
+      if (!response || response.ok !== true ||
+          response.teamCode !== requestScope.teamCode ||
+          response.month !== requestScope.month ||
+          Number(response.year) !== requestScope.year ||
+          !Array.isArray(response.completedStations)) {
+        throw new Error('Respons status stesen tidak sah');
+      }
+      // Jika pengguna menukar kumpulan / sesi ketika fetch berlaku, jangan timpa sesi baru.
+      if (!session || !currentTeam ||
+          Number(session.year || new Date().getFullYear()) !== requestScope.year ||
+          session.month !== requestScope.month || currentTeam.code !== requestScope.teamCode) return false;
+
+      const prefix = `${requestScope.year}-${requestScope.month}-${requestScope.teamCode}-`;
+      const activeOnServer = new Set(response.completedStations.map(st => prefix + st));
+      const pendingOffline = new Set();
+      // PWA: kekalkan kunci untuk laporan belum sync supaya tidak dihantar dua kali.
+      // Jika IndexedDB tidak boleh dibaca, jangan buang kunci lama secara membuta tuli.
+      const pendingRows = await idbGetAll_('offlineQueue');
+      pendingRows.forEach(row => {
+        if (!row || !row.payload) return;
+        if (Number(row.payload.year || requestScope.year) !== requestScope.year ||
+            row.payload.month !== requestScope.month || row.payload.teamCode !== requestScope.teamCode) return;
+        const st = String(row.payload.station || '').trim();
+        if (st) pendingOffline.add(prefix + st);
+      });
+      // Hanya ganti status bagi bulan/tahun/kumpulan ini, jangan kacau kumpulan lain.
+      const next = new Set([...submittedStations].filter(key => !String(key).startsWith(prefix)));
+      activeOnServer.forEach(key => next.add(key));
+      pendingOffline.forEach(key => next.add(key));
+      submittedStations = next;
+      try { localStorage.setItem('dklpo_submitted_stations', JSON.stringify([...next])); }
+      catch (storageError) { console.warn('Tidak dapat menyimpan status terkini', storageError); }
+      return true;
+    } catch (error) {
+      // Jika offline / Apps Script gagal, jangan buka semula rekod tanpa kepastian.
+      console.warn('Semakan status stesen gagal; status terakhir dikekalkan:', error);
+      return false;
+    }
+  })();
+  try { return await stationStatusRefreshInFlight_; }
+  finally { stationStatusRefreshInFlight_ = null; }
+}
+
+async function refreshStationStateOnReturn_() {
+  if (!session || !currentTeam) return;
+  const ok = await refreshSubmittedStationsFromServer_();
+  if (ok && !currentStation &&
+      document.getElementById('pageInspection')?.classList.contains('active')) {
+    await showInspectionPage(true);
+  }
+}
+
+async function refreshStationListManually_() {
+  const hasDraftWork = !!currentStation && !hasSubmittedCurrent &&
+    (Object.keys(checklistData || {}).length > 0 || photos.length > 0 ||
+     currentRating > 0 || (document.getElementById('inspectComment')?.value || '').trim() ||
+     Object.keys(findingsDraft || {}).length > 0);
+  if (hasDraftWork) {
+    const ok = await refreshSubmittedStationsFromServer_();
+    if (ok) {
+      const stationSelect = document.getElementById('stationSelect');
+      const assigned = getAssignedStationsForTeam(currentTeam, session.month);
+      const available = assigned.filter(st => !submittedStations.has(stationStatusKey_(st)));
+      // Update menu tanpa reset gambar, komen, rating atau jawapan checklist.
+      stationSelect.replaceChildren();
+      const placeholder = new Option('-- ' + t('Pilih Stesen', 'Select Station') + ' --', '');
+      stationSelect.add(placeholder);
+      for (const station of available) stationSelect.add(new Option(station, station));
+      // Pastikan pilihan draf semasa tidak hilang walaupun berubah di pelayan.
+      if (currentStation && !available.includes(currentStation)) {
+        stationSelect.add(new Option(currentStation + ' (' + t('Draf semasa','Current draft') + ')', currentStation));
+      }
+      stationSelect.value = currentStation || '';
+    }
+    showToast(ok
+      ? t('Status stesen dikemas kini. Draf semasa dikekalkan.', 'Station status updated. Current draft preserved.')
+      : t('Status tidak dapat disemak. Semak internet dan cuba lagi.', 'Unable to check status. Check the connection and retry.'),
+      ok ? 'success' : 'warning');
+    return;
+  }
+  await showInspectionPage();
 }
 
 function getAssignedStationsForTeam(team, month) {
@@ -1926,7 +2333,7 @@ function getAssignedStationsForTeam(team, month) {
 
 function loadStation(station) {
   // Check if station already submitted
-  const stationKey = `${session.month}-${currentTeam.code}-${station}`;
+  const stationKey = `${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${station}`;
   if (submittedStations.has(stationKey)) {
     showToast(t('Stesen ini telah diperiksa', 'This station has been inspected'), 'error');
     return;
@@ -1945,6 +2352,9 @@ currentStation = station;
   document.getElementById('submitWarning').classList.add('show');
 
 document.getElementById('currentStationBadge').textContent = station;
+  geoPreviousStation_='';
+  renderGeoDistance_();
+  startGeoDistanceWatch_();
   document.getElementById('inspectorNameDisplay').textContent = currentTeam.name;
   document.getElementById('stationSelect').value = station;
 
@@ -1962,7 +2372,7 @@ const container = document.getElementById('checklistContainer');
         ${sec.items.map((item, i) => `
           <div class="check-option">
             <label>${item}</label>
-            <select class="status-select" onchange="updateChecklist('${sec.sec}', '${item}', this.value)">
+            <select class="status-select" data-item-key="${escapeHtml(sec.sec + '-' + item)}" onchange="updateChecklistByKey_(this.dataset.itemKey, this.value)">
               <option value="Memuaskan">✓ ${t('Memuaskan', 'Satisfactory')}</option>
               <option value="Tidak Memuaskan">✗ ${t('Tidak', 'No')}</option>
               <option value="Tidak Berkenaan">○ ${t('N/A', 'N/A')}</option>
@@ -1989,6 +2399,12 @@ renderIssueSection();            // NEW (keeps hidden when empty)
 
 async function changeStation(station) {
   if (!station) return;
+  await refreshSubmittedStationsFromServer_();
+  if (submittedStations.has(stationStatusKey_(station))) {
+    showToast(t('Stesen ini telah diperiksa di pelayan.', 'This station is already inspected on the server.'), 'warning');
+    document.getElementById('stationSelect').value = currentStation || '';
+    return;
+  }
 
 // GPS must be ON to access checklist
   const gps = await requireGps_('checklist');
@@ -2008,6 +2424,16 @@ if (Object.keys(checklistData).length > 0 || photos.length > 0) {
 
 function toggleChecklist(idx) {
   document.getElementById(`checkSec${idx}`).classList.toggle('open');
+}
+
+function updateChecklistByKey_(key, value) {
+  if (!key) return;
+  checklistData[key] = value;
+  if (value === 'Tidak Memuaskan') {
+    if (!findingsDraft[key]) findingsDraft[key] = { itemKey:key, type:'NCR', severity:'Medium', pic:'', action:'', rootCause:'', dueDate:'' };
+  } else { delete findingsDraft[key]; }
+  renderIssueSection();
+  scheduleDraftSave_();
 }
 
 function updateChecklist(section, item, value) {
@@ -2089,10 +2515,10 @@ wrap.style.display = 'block';
 
 ${keys.map((k, i) => {
       const f = findingsDraft[k];
-      const kEnc = encodeURIComponent(k);
+      const kEnc = encodeURIComponent(k).replace(/'/g, "%27");
       return `
         <div style="margin-top:12px;border:1px solid var(--stroke);border-radius:12px;overflow:hidden;">
-          <div style="padding:12px 14px;background:var(--surface-elevated);font-weight:700;">${i + 1}. ${k}</div>
+          <div style="padding:12px 14px;background:var(--surface-elevated);font-weight:700;">${i + 1}. ${escapeHtml(k)}</div>
           <div style="padding:12px 14px;display:grid;gap:10px;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div>
@@ -2115,22 +2541,22 @@ ${keys.map((k, i) => {
 
 <div>
               <label style="display:block;margin-bottom:6px;">PIC</label>
-              <input class="form-control" value="${f.pic || ''}" onchange="updateFindingField('${kEnc}','pic',this.value)" />
+              <input class="form-control" value="${escapeHtml(f.pic || '')}" onchange="updateFindingField('${kEnc}','pic',this.value)" />
             </div>
 
 <div>
               <label style="display:block;margin-bottom:6px;">${t('Tindakan Diperlukan','Action Required')}</label>
-              <textarea class="form-control" rows="2" onchange="updateFindingField('${kEnc}','action',this.value)">${f.action || ''}</textarea>
+              <textarea class="form-control" rows="2" onchange="updateFindingField('${kEnc}','action',this.value)">${escapeHtml(f.action || '')}</textarea>
             </div>
 
 <div>
               <label style="display:block;margin-bottom:6px;">${t('Punca Akar (optional)','Root cause (optional)')}</label>
-              <textarea class="form-control" rows="2" onchange="updateFindingField('${kEnc}','rootCause',this.value)">${f.rootCause || ''}</textarea>
+              <textarea class="form-control" rows="2" onchange="updateFindingField('${kEnc}','rootCause',this.value)">${escapeHtml(f.rootCause || '')}</textarea>
             </div>
 
 <div>
               <label style="display:block;margin-bottom:6px;">${t('Tarikh Tamat (optional)','Due date (optional)')}</label>
-              <input type="date" class="form-control" value="${f.dueDate || ''}" onchange="updateFindingField('${kEnc}','dueDate',this.value)" />
+              <input type="date" class="form-control" value="${escapeHtml(f.dueDate || '')}" onchange="updateFindingField('${kEnc}','dueDate',this.value)" />
             </div>
           </div>
         </div>
@@ -2150,34 +2576,22 @@ function updateFindingField(keyEncoded, field, value) {
 function showOfflineQueuedSuccessModal_() {
   document.getElementById('successTitle').innerHTML = '📥 <span>' + t('Disimpan Offline','Saved Offline') + '</span>';
   document.getElementById('successMsg').textContent = t('Pemeriksaan lengkap disimpan pada peranti. Ia akan dihantar automatik apabila internet tersedia.', 'The full inspection is stored on this device and will sync automatically when internet is available.');
+  document.getElementById('successNext').style.display = '';
   document.getElementById('successNext').innerHTML = '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:12px;color:var(--warn);font-size:13px;">' + t('Jangan padam data browser/app sebelum status sync berjaya.', 'Do not clear browser/app data before the sync succeeds.') + '</div>';
   document.getElementById('successModal').classList.add('active');
 }
 
 function showSubmitSuccessModal(result) {
-  document.getElementById('successMsg').textContent =
-    t('Terima kasih. Tekan OK untuk log keluar.', 'Thank you. Press OK to logout.');
-
-const next = document.getElementById('successNext');
-  const nt = result && result.nextTeam ? result.nextTeam : null;
-
-if (nt && nt.teamName) {
-    next.innerHTML = `
-      <div style="background:rgba(34,197,94,0.08);border:1px solid var(--stroke);border-radius:12px;padding:12px;">
-        <div style="font-weight:700;margin-bottom:6px;">🔔 ${t('Pemeriksa seterusnya','Next team')}</div>
-        <div style="color:var(--text-secondary);font-size:13px;">
-          <b>${nt.teamName}</b><br/>
-          ${nt.station ? (t('Stesen','Station') + ': <b>' + nt.station + '</b>') : ''}
-        </div>
-      </div>`;
-  } else {
-    next.innerHTML = `
-      <div style="color:var(--text-secondary);font-size:13px;margin-top:10px;">
-        ${t('Tiada pemeriksa seterusnya.','No next team.')}
-      </div>`;
-  }
-
-document.getElementById('successModal').classList.add('active');
+  const title = document.getElementById('successTitle');
+  const msg = document.getElementById('successMsg');
+  const extra = document.getElementById('successNext');
+  // Set correct title even after showing an offline queue confirmation.
+  title.textContent = '✅ ' + t('Laporan dihantar', 'Report submitted');
+  msg.textContent = t('Terima kasih. Tekan OK untuk log keluar.', 'Thank you. Press OK to logout.');
+  // Every team uses its own phone. Never display details of another team here.
+  extra.replaceChildren();
+  extra.style.display = 'none';
+  document.getElementById('successModal').classList.add('active');
 }
 
 function closeSuccessModal(shouldLogout) {
@@ -2277,7 +2691,7 @@ function updatePhotoComment(photoId, comment) {
   if (photo) {
     photo.comment = comment;
     if (photo.reviewAccepted) photo.reviewAccepted.comment = false;
-    saveDraft();
+    scheduleDraftSave_();
   }
 }
 
@@ -2322,13 +2736,9 @@ function findChecklistKeyForReview(ai) {
 
 function setChecklistUiValueByKey(key, value) {
   if (!key) return;
-  const list = getCurrentChecklistForReview();
-  let wanted = '';
-  for (const sec of list) for (const item of sec.items) if (`${sec.section}-${item}` === key) wanted = item;
-  if (!wanted) return;
-  document.querySelectorAll('.check-option').forEach(row => {
-    const label=row.querySelector('label'), select=row.querySelector('.status-select');
-    if (label && select && normalizeForMatch(label.textContent)===normalizeForMatch(wanted)) select.value=value;
+  // Match the exact item key; text-based matching could update the wrong row.
+  document.querySelectorAll('.status-select').forEach(select => {
+    if (select.dataset.itemKey === key) select.value = value;
   });
 }
 
@@ -2353,7 +2763,7 @@ function renderPhotoReview(photo) {
   const hazardHtml=hazards.length?`<ul class="review-hazard-list">${hazards.map(h=>`<li>${escapeHtml(h)}</li>`).join('')}</ul>`:`<span>${t('Tiada hazard yang dapat dikenal pasti dengan yakin daripada gambar ini.','No hazard could be identified confidently from this image.')}</span>`;
   const acceptedHtml=(accepted.all||accepted.comment||accepted.generalComment||accepted.checklist||accepted.finding||accepted.rating||accepted.insight)?`<div class="review-accepted">✓ ${t('Sebahagian atau semua cadangan telah digunakan oleh pemeriksa.','Some or all suggestions have been applied by the inspector.')}</div>`:'';
   return `<div class="review-result"><div class="review-result-head"><span class="review-title">${t('Hasil Semakan','Review Result')}</span><span class="review-badge review-confidence">${conf}%</span></div><div class="review-result-body">
-    ${q.status==='RETAKE'?`<div class="review-warning">📷 ${escapeHtml(q.message||t('Gambar kurang sesuai untuk penilaian. Ambil semula gambar.','Image is not suitable for reliable assessment. Retake the image.'))}</div>`:''}
+    ${(q.status!=='OK' || review.evidenceSufficient !== true)?`<div class="review-warning">📷 ${escapeHtml(q.message||t('Cadangan tidak boleh digunakan. Periksa secara manual atau ambil gambar semula.','Suggestions cannot be applied. Inspect manually or retake the image.'))}</div>`:''}
     ${mismatch?`<div class="review-warning">⚠️ ${escapeHtml(mismatch)}</div>`:''}${acceptedHtml}
     <div class="review-row"><strong>${t('Pemerhatian','Observation')}</strong>${escapeHtml(review.observation||'-')}</div>
     <div class="review-row"><strong>${t('Hazard Kelihatan','Visible Hazards')}</strong>${hazardHtml}</div>
@@ -2375,13 +2785,14 @@ async function reviewPhoto(photoId) {
   if (!photo||!photo.data) return showToast(t('Gambar tidak ditemui.','Image not found.'),'error');
   photo.reviewState='loading'; photo.reviewError=''; renderPhotoList();
   try {
-    const result=await postToWebApp({action:PHOTO_REVIEW_ACTION,station:currentStation,inspectionLang,imageData:normalizeDataUrl(photo.data),checklist:JSON.stringify(getCurrentChecklistForReview()),existingChecklist:JSON.stringify(checklistData||{})},{timeoutMs:45000,retries:1});
+    const result=await postToWebApp({action:PHOTO_REVIEW_ACTION,teamCode:currentTeam.code,month:session.month,station:currentStation,inspectionLang,imageData:normalizeDataUrl(photo.data),checklist:JSON.stringify(getCurrentChecklistForReview()),existingChecklist:JSON.stringify(checklistData||{})},{timeoutMs:45000,retries:1});
     if (!result||!result.ok) throw new Error((result&&result.error)||t('Semakan gambar tidak memberi respons yang sah.','The image review did not return a valid response.'));
     const analysis=result.analysis;
     if (!analysis||typeof analysis!=='object') throw new Error(t('Format hasil semakan tidak sah.','Invalid review result format.'));
     photo.reviewAnalysis=analysis; photo.reviewState='done'; photo.reviewAccepted={comment:false,checklist:false,finding:false,all:false}; photo.reviewedAt=result.timestamp||new Date().toISOString();
     saveDraft(); renderPhotoList();
-    showToast(analysis.imageQuality&&analysis.imageQuality.status==='RETAKE'?t('Gambar perlu diambil semula untuk semakan yang lebih jelas.','Retake the image for a clearer review.'):t('Semakan gambar selesai. Sila semak cadangan sebelum menggunakannya.','Image review complete. Check the suggestions before applying them.'),analysis.imageQuality&&analysis.imageQuality.status==='RETAKE'?'warning':'success');
+    const safeToApply = analysis.imageQuality && analysis.imageQuality.status === 'OK' && analysis.evidenceSufficient === true;
+    showToast(safeToApply ? t('Semakan gambar selesai. Sila sahkan cadangan AI.', 'Photo review complete. Verify AI suggestions.') : t('Gambar atau bukti tidak mencukupi. AI tidak akan mengubah checklist secara automatik.', 'Image quality or evidence insufficient. AI will not automatically change the checklist.'), safeToApply ? 'success' : 'warning');
   } catch(err) {
     console.error('Photo review error:',err);
     photo.reviewState='error';
@@ -2391,8 +2802,23 @@ async function reviewPhoto(photoId) {
   }
 }
 
+function allowApplyAiSuggestion_(photo, feature) {
+  const review = photo && photo.reviewAnalysis;
+  if (!review) return false;
+  const quality = String(review.imageQuality && review.imageQuality.status || 'UNCERTAIN');
+  if (quality !== 'OK' || review.evidenceSufficient !== true) {
+    showToast(t(
+      'Cadangan AI tidak boleh digunakan: gambar kabur/tidak pasti atau bukti tidak mencukupi. Ambil gambar lebih jelas atau buat penilaian manual.',
+      'AI suggestion blocked: image quality uncertain or insufficient evidence. Retake the image or assess manually.'
+    ), 'warning');
+    return false;
+  }
+  return true;
+}
+
 function useReviewComment(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return;
+  if (!allowApplyAiSuggestion_(photo, 'useReviewComment')) return false;
   photo.comment=String(photo.reviewAnalysis.suggestedComment||photo.reviewAnalysis.observation||'').trim();
   photo.reviewAccepted=photo.reviewAccepted||{}; photo.reviewAccepted.comment=true;
   saveDraft(); renderPhotoList(); showToast(t('Komen dimasukkan. Anda masih boleh edit.','Comment inserted. You can still edit it.'),'success');
@@ -2401,6 +2827,7 @@ function useReviewComment(photoId) {
 
 function applyReviewGeneralComment(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewGeneralComment')) return false;
   const review=photo.reviewAnalysis;
   const text=String(review.suggestedComment||review.observation||'').trim();
   if(!text)return false;
@@ -2413,6 +2840,7 @@ function applyReviewGeneralComment(photoId) {
 
 function applyReviewRating(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewRating')) return false;
   const rating=Number(photo.reviewAnalysis.suggestedRating||0);
   if(rating<1||rating>5){showToast(t('AI tidak mempunyai bukti mencukupi untuk mencadangkan rating.','AI does not have enough evidence to suggest a rating.'),'warning');return false;}
   const ok=setRatingByValue_(rating);
@@ -2424,6 +2852,7 @@ function applyReviewRating(photoId) {
 
 function applyReviewInsight(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewInsight')) return false;
   const insight=String(photo.reviewAnalysis.aiInsight||'').trim();
   if(!insight)return false;
   if(!aiInsightText.includes(insight)) aiInsightText = aiInsightText ? (aiInsightText + '\n\n' + insight) : insight;
@@ -2436,6 +2865,7 @@ function applyReviewInsight(photoId) {
 
 function applyReviewChecklist(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewChecklist')) return false;
   const review=photo.reviewAnalysis, status=review.suggestedStatus;
   if(!['Memuaskan','Tidak Memuaskan'].includes(status)){showToast(t('Keputusan memerlukan semakan manusia dan status checklist tidak diubah.','Human review is required and the checklist status was not changed.'),'warning');return false;}
   const key=findChecklistKeyForReview(review); if(!key){showToast(t('Item cadangan tidak dapat dipadankan dengan checklist sistem.','The suggested item could not be matched to the system checklist.'),'warning');return false;}
@@ -2455,6 +2885,7 @@ function applyReviewChecklist(photoId) {
 
 function applyReviewFinding(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return false;
+  if (!allowApplyAiSuggestion_(photo, 'applyReviewFinding')) return false;
   const review=photo.reviewAnalysis,key=findChecklistKeyForReview(review); if(!key){showToast(t('Item cadangan tidak dapat dipadankan.','The suggested item could not be matched.'),'warning');return false;}
   if(review.suggestedStatus!=='Tidak Memuaskan'){showToast(t('NCR/CAP/PAR hanya boleh diisi apabila status yang dicadangkan ialah Tidak Memuaskan.','NCR/CAP/PAR can only be filled when the suggested status is Unsatisfactory.'),'warning');return false;}
   checklistData[key]='Tidak Memuaskan'; setChecklistUiValueByKey(key,'Tidak Memuaskan');
@@ -2466,6 +2897,7 @@ function applyReviewFinding(photoId) {
 
 function acceptAllReviewSuggestions(photoId) {
   const photo=photos.find(p=>p.id===photoId); if(!photo||!photo.reviewAnalysis)return;
+  if (!allowApplyAiSuggestion_(photo, 'acceptAllReviewSuggestions')) return false;
   useReviewComment(photoId);
   applyReviewGeneralComment(photoId);
   const checklistOk=applyReviewChecklist(photoId);
@@ -2480,7 +2912,7 @@ function acceptAllReviewSuggestions(photoId) {
 function renderPhotoList() {
   const container=document.getElementById('photoListContainer');
   if(photos.length===0){container.innerHTML='';updatePhotoSummary();return;}
-  container.innerHTML=photos.map((photo,index)=>`<div class="photo-item" data-id="${photo.id}"><div class="photo-item-header"><span class="photo-number">${index+1}</span><span style="font-size:12px;color:var(--text-secondary);">${photo.source==='camera'?'📷':'🖼️'} ${formatFileSize(photo.size)}</span>${photo.reviewAnalysis?`<span class="review-badge" style="margin-left:8px;">✓ ${t('Disemak','Reviewed')}</span>`:''}<button class="photo-remove" onclick="removePhoto(${photo.id})">×</button></div><div class="photo-preview"><img src="${photo.data}" alt="Photo ${index+1}"></div><div class="photo-comment"><label>${t('Komen untuk gambar ini','Comment for this image')}:</label><textarea placeholder="${t('Masukkan komen...','Enter comment...')}" onchange="updatePhotoComment(${photo.id}, this.value)">${escapeHtml(photo.comment||'')}</textarea></div>${renderPhotoReview(photo)}</div>`).join('');
+  container.innerHTML=photos.map((photo,index)=>`<div class="photo-item" data-id="${photo.id}"><div class="photo-item-header"><span class="photo-number">${index+1}</span><span style="font-size:12px;color:var(--text-secondary);">${photo.source==='camera'?'📷':'🖼️'} ${formatFileSize(photo.size)}</span>${photo.reviewAnalysis?`<span class="review-badge" style="margin-left:8px;">✓ ${t('Disemak','Reviewed')}</span>`:''}<button class="photo-remove" onclick="removePhoto(${photo.id})">×</button></div><div class="photo-preview"><img src="${photo.data}" alt="Photo ${index+1}"></div><div class="photo-comment"><label>${t('Komen untuk gambar ini','Comment for this image')}:</label><textarea placeholder="${t('Masukkan komen...','Enter comment...')}" oninput="updatePhotoComment(${photo.id}, this.value)">${escapeHtml(photo.comment||'')}</textarea></div>${renderPhotoReview(photo)}</div>`).join('');
   updatePhotoSummary();
 }
 
@@ -2578,6 +3010,27 @@ function formatFileSize(bytes) {
 // ============================================
 // SUBMISSION - WITH SUCCESS MODAL & AUTO LOGOUT
 // ============================================
+// If photo uploads take a long time, refresh the GPS before final submit.
+// Never re-upload already uploaded photos just because the GPS fix expired.
+async function refreshFinalSubmissionGps_(payload) {
+  const capturedMs = Date.parse(String(payload && payload.gpsCapturedAt || ''));
+  const liveOutsideAfterSample = geoLiveFix_ && geoLiveFix_.timestamp > capturedMs &&
+    geoDistanceSnapshot_(currentStation, geoLiveFix_).status === 'OUTSIDE';
+  if (!Number.isFinite(capturedMs) || Date.now() - capturedMs > 30000 || liveOutsideAfterSample) {
+    const gps = await requireGps_('final-submit');
+    if (!gps.ok) throw new Error('GPS_REQUIRED');
+    payload.lat = session.lat;
+    payload.lng = session.lng;
+    payload.gpsAccuracy = session.accuracy;
+    payload.gpsCapturedAt = session.gpsCapturedAt;
+    payload.gpsSampleCount = session.gpsSampleCount;
+    payload.gpsSpreadM = session.gpsSpreadM;
+  }
+  assertGeoInsideForSubmit_({lat:payload.lat,lng:payload.lng,accuracy:payload.gpsAccuracy,capturedAt:payload.gpsCapturedAt});
+  payload.timestamp = new Date().toISOString();
+  return payload;
+}
+
 async function submitInspection() {
   if (isSubmitting || hasSubmittedCurrent) {
     showToast(t('Laporan sedang/sudah dihantar', 'Report already submitted'), 'warning');
@@ -2588,8 +3041,19 @@ if (!currentRating) {
     showToast(t('Sila pilih rating', 'Please select rating'), 'error');
     return;
   }
+  const findingItems = Object.values(findingsDraft || {});
+  for (let i=0; i<findingItems.length; i++) {
+    const f=findingItems[i];
+    if (!String(f.pic||'').trim() || !String(f.action||'').trim()) {
+      showToast(t(`Lengkapkan PIC dan Tindakan Diperlukan untuk isu #${i+1}.`,
+        `Complete PIC and Action Required for issue #${i+1}.`),'error');
+      return;
+    }
+  }
 
-const stationKey = `${session.month}-${currentTeam.code}-${currentStation}`;
+// Semakan langsung sebelum submit membolehkan pemeriksaan semula jika Admin telah padam.
+  await refreshSubmittedStationsFromServer_();
+  const stationKey = stationStatusKey_(currentStation);
   if (submittedStations.has(stationKey)) {
     showToast(t('Stesen ini telah diperiksa', 'This station already inspected'), 'error');
     return;
@@ -2605,15 +3069,37 @@ const totalItems = document.querySelectorAll('.status-select').length;
 
 // Offline-first submission: save the complete inspection package locally before any upload.
   if (!navigator.onLine) {
-    const gpsNow = await requireGps_('submit');
-    if (!gpsNow.ok) return;
-    const offlinePayload = buildInspectionPayload_();
-    await queueInspectionOffline_(offlinePayload);
-    showOfflineQueuedSuccessModal_();
+    isSubmitting = true;
+    const offlineBtn = document.getElementById('btnSubmit');
+    offlineBtn.disabled = true;
+    try {
+      if (!(await saveDraft())) throw new Error('DRAFT_SAVE_FAILED');
+      const gpsNow = await requireGps_('submit');
+      if (!gpsNow.ok) return;
+      assertGeoInsideForSubmit_(gpsNow);
+      const offlinePayload = buildInspectionPayload_();
+      await queueInspectionOffline_(offlinePayload);
+      showOfflineQueuedSuccessModal_();
+    } catch (offlineError) {
+      console.error('Offline queue save failed:', offlineError);
+      if (String(offlineError && offlineError.message) !== 'GPS_OUTSIDE_PRECHECK') {
+        showToast(t('Pemeriksaan gagal disimpan offline. Draf masih ada; jangan padam data browser.',
+          'Offline save failed. The draft remains; do not clear browser data.'),'error');
+      }
+    } finally {
+      isSubmitting = false;
+      offlineBtn.disabled = hasSubmittedCurrent;
+      offlineBtn.textContent = hasSubmittedCurrent ? t('✓ Menunggu Sync','✓ Awaiting Sync') : t('🚀 Hantar Pemeriksaan','🚀 Submit Inspection');
+    }
     return;
   }
 
-isSubmitting = true;
+// Persist all photos and the submission ID before the first network request.
+  if (!(await saveDraft())) {
+    showToast(t('Tidak dapat menyimpan gambar pada peranti. Jangan tutup halaman.', 'Could not save photos on this device. Keep this page open.'), 'error');
+    return;
+  }
+  isSubmitting = true;
   hasSubmittedCurrent = true;
   const btn = document.getElementById('btnSubmit');
   btn.disabled = true;
@@ -2626,6 +3112,7 @@ let payload = null;
     // Refresh GPS at submission time (mandatory)
     const gpsNow = await requireGps_('submit');
     if (!gpsNow.ok) throw new Error('GPS_REQUIRED');
+    assertGeoInsideForSubmit_(gpsNow);
 
 payload = buildInspectionPayload_();
 
@@ -2657,13 +3144,14 @@ const photoUrls = [];
 
 payload.photos = photoUrls;
     uploadsCompleted = true;
+    await refreshFinalSubmissionGps_(payload);
     const result = await submitWithRetry(payload);
 
 if (result.ok) {
       submittedStations.add(stationKey);
       localStorage.setItem('dklpo_submitted_stations', JSON.stringify([...submittedStations]));
-      clearDraft();
-      sessionStorage.setItem('dklpo_just_submitted', 'true');
+      await clearDraft();
+      try { sessionStorage.setItem('dklpo_just_submitted', 'true'); } catch (_) {}
 
 // Show success modal instead of toast
       showSubmitSuccessModal(result);
@@ -2674,7 +3162,9 @@ if (result.ok) {
   } catch (err) {
     console.error('Submit failed:', err);
     hasSubmittedCurrent = false;
-    if (String(err && err.message) === 'GPS_REQUIRED') {
+    if (String(err && err.message) === 'GPS_OUTSIDE_PRECHECK') {
+      // Amaran khusus telah dipaparkan oleh semakan geofence sebelum upload.
+    } else if (String(err && err.message) === 'GPS_REQUIRED') {
       showToast(t('GPS diperlukan. Sila hidupkan GPS/Location.', 'GPS is required. Please enable GPS/Location.'), 'error');
     } else if (isLikelyNetworkError_(err)) {
       try {
@@ -2699,10 +3189,37 @@ if (result.ok) {
   }
 }
 
+function photoUploadKey_(submissionId, photo, index) {
+  const stableId = String(photo && photo.id != null ? photo.id : `legacy-${index}`).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 70);
+  return `${submissionId}-PHOTO-${stableId}`;
+}
+
+function photoReceiptKey_(submissionId, photo, index) {
+  return 'uploadReceipt:' + photoUploadKey_(submissionId, photo, index);
+}
+
+async function getSavedPhotoReceipt_(submissionId, photo, index) {
+  try {
+    const record = await idbGet_('kv', photoReceiptKey_(submissionId, photo, index));
+    return record && record.value && record.value.url ? record.value : null;
+  } catch (_) { return null; }
+}
+
+async function rememberPhotoReceipt_(submissionId, photo, index, response) {
+  const value = {url:response.url, fileId:response.fileId||'', resourceKey:response.resourceKey||''};
+  try { await idbPut_('kv', {key: photoReceiptKey_(submissionId, photo, index), value}); }
+  catch (err) { console.warn('Photo upload receipt not persisted; server uploadKey still protects retries',err); }
+  return value;
+}
+
 async function uploadPhotoWithRetry(photo, index, retries = 3) {
+  const submissionId = currentSubmissionId || (currentSubmissionId = newSubmissionId_());
+  const saved = await getSavedPhotoReceipt_(submissionId, photo, index);
+  if (saved) return {ok:true, ...saved, fromLocalReceipt:true};
   const payload = {
     action: 'uploadPhoto',
-    uploadKey: `${currentSubmissionId || (currentSubmissionId = newSubmissionId_())}-P${index}`,
+    teamCode: currentTeam.code,
+    uploadKey: photoUploadKey_(submissionId, photo, index),
     month: session.month,
     station: currentStation,
     inspectorName: session.inspectorName,
@@ -2716,6 +3233,7 @@ async function uploadPhotoWithRetry(photo, index, retries = 3) {
   if (!result || !result.ok) {
     throw new Error((result && result.error) || t(`Gagal upload gambar ${index}`, `Failed to upload photo ${index}`));
   }
+  await rememberPhotoReceipt_(submissionId, photo, index, result);
   return result;
 }
 
@@ -2812,7 +3330,7 @@ async function postToWebApp(payload, options = {}) {
 
 function nextStation() {
   const assigned = getAssignedStationsForTeam(currentTeam, session.month);
-  const availableStations = assigned.filter(st => !submittedStations.has(`${session.month}-${currentTeam.code}-${st}`));
+  const availableStations = assigned.filter(st => !submittedStations.has(`${session.year || new Date().getFullYear()}-${session.month}-${currentTeam.code}-${st}`));
   const currentIdx = availableStations.indexOf(currentStation);
   const nextStation = availableStations[currentIdx + 1];
 
