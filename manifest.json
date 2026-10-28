@@ -3,7 +3,7 @@
   "short_name": "KKPAS",
   "description": "KKPAS Monthly Inspection workplace safety inspection system with offline inspection, evidence draft recovery, AI review and notification centre.",
   "id": "./",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
