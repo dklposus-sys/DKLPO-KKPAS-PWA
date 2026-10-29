@@ -1,9 +1,9 @@
 {
   "name": "KKPAS Monthly Inspection - Desa Kim Loong Palm Oil Sdn Bhd",
   "short_name": "KKPAS",
-  "description": "KKPAS Monthly Inspection workplace safety inspection system with offline inspection, evidence draft recovery, AI review and notification centre.",
+  "description": "KKPAS workplace safety inspection system with monthly inspections, Ad-Hoc NCR/CAR/PAR reports, offline evidence draft recovery and PWA AI review.",
   "id": "./",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
