@@ -1,6 +1,6 @@
 const CACHE_NAME = 'kkpas-pwa-v5-3-1-hardened';
 const APP_SHELL = ['./', './manifest.json'];
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzWcWIO8LZMTpEGYtK_MHj6TMXukiFji7LcaLvtYvTxIR2MML2pXyPHjWsrxZAxk0SQ/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwHTRO_asLzBFhKwnolGE5egZ0zD3bHust69dROJMLJrwZw-gHNhNQm8u3IK_CbL5bj/exec';
 const DB_NAME = 'kkpas-offline-v1';
 const DB_VERSION = 3;
 const MAX_SYNC_ATTEMPTS = 5;
